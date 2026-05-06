@@ -1,7 +1,7 @@
 # start-dev.ps1
 
 #update the root according to your local path
-$Root = "D:\zentra websockets"
+$Root = "D:\zentra web"
 
 function Start-DevService {
     param (

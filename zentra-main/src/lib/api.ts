@@ -1,15 +1,21 @@
 const trimSlash = (value: string) => value.replace(/\/$/, "");
 
 export const MEAL_API_BASE_URL = trimSlash(
-  import.meta.env.VITE_MEAL_GENERATOR_API_BASE_URL ?? "http://localhost:8000",
+  import.meta.env.VITE_MEAL_GENERATOR_API_BASE_URL ??
+    import.meta.env.EXPO_PUBLIC_MEAL_GENERATOR_API_BASE_URL ??
+    "http://localhost:8000",
 );
 
 export const RAG_API_BASE_URL = trimSlash(
-  import.meta.env.VITE_RAG_API_BASE_URL ?? "http://localhost:8001",
+  import.meta.env.VITE_RAG_API_BASE_URL ??
+    import.meta.env.EXPO_PUBLIC_RAG_API_BASE_URL ??
+    "http://localhost:8001",
 );
 
 export const MODEL_GATEWAY_API_BASE_URL = trimSlash(
-  import.meta.env.VITE_MODEL_GATEWAY_API_BASE_URL ?? "http://localhost:8010",
+  import.meta.env.VITE_MODEL_GATEWAY_API_BASE_URL ??
+    import.meta.env.EXPO_PUBLIC_MODEL_GATEWAY_API_BASE_URL ??
+    "http://localhost:8010",
 );
 
 export type ApiStatus = "checking" | "online" | "offline";
@@ -53,6 +59,21 @@ export type DayMealPlan = {
 };
 
 export type WeeklyMealPlan = Record<string, DayMealPlan>;
+
+export type RecipeResponse = {
+  meal_name?: string;
+  ingredients?: {
+    heading?: string;
+    items?: string[];
+  };
+  instructions?: {
+    heading?: string;
+    steps?: string[];
+  };
+  [key: string]: unknown;
+};
+
+export type ShoppingList = Record<string, string[]>;
 
 export type RagResponse = {
   answer: string;
@@ -138,6 +159,31 @@ export function generateWeeklyMealPlan(payload: MealPlanRequest) {
   });
 }
 
+export function generateDailyRecipes(meals: Record<string, string>) {
+  return postJson<Record<string, RecipeResponse>>(MEAL_API_BASE_URL, "/api/v1/recipe/generate-daily-recipes", {
+    meals,
+  });
+}
+
+export function generateShoppingList(weeklyPlan: WeeklyMealPlan) {
+  const shoppingPayload = Object.fromEntries(
+    Object.entries(weeklyPlan).map(([dayKey, dayPlan]) => [
+      dayKey,
+      Object.fromEntries(
+        Object.entries(dayPlan).map(([mealKey, meal]) => [
+          mealKey,
+          {
+            food: meal.food,
+            portion: meal.portion,
+          },
+        ]),
+      ),
+    ]),
+  );
+
+  return postJson<{ data: ShoppingList }>(MEAL_API_BASE_URL, "/api/v1/shopping_list/generate", shoppingPayload);
+}
+
 export function parseMealPlan(value: unknown): WeeklyMealPlan {
   const raw =
     typeof value === "string"
@@ -163,6 +209,7 @@ export function loadBicepCurlModel() {
     "/api/v1/bicep-curl/load",
   );
 }
+
 
 export function startBicepCurlSession() {
   return postJson<BicepCurlSession>(
