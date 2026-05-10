@@ -734,7 +734,12 @@ small,
   grid-template-rows: auto 1fr auto;
 }
 
+.chat-screen.with-tabs {
+  padding-bottom: 0;
+}
+
 .messages {
+  min-height: 0;
   padding: 16px 24px;
   display: flex;
   flex-direction: column;
@@ -768,7 +773,7 @@ small,
   display: grid;
   grid-template-columns: 1fr 44px;
   gap: 12px;
-  padding: 10px 18px 92px;
+  padding: 10px 18px 14px;
   background: var(--card);
 }
 
@@ -3136,7 +3141,7 @@ html body .home-logo-circle img {
 html body .chat-input {
   grid-template-columns: 1fr 40px !important;
   gap: 8px !important;
-  padding: 6px 12px calc(76px + env(safe-area-inset-bottom)) !important;
+  padding: 8px 12px calc(10px + env(safe-area-inset-bottom)) !important;
 }
 
 html body .chat-input input {
@@ -3304,6 +3309,32 @@ html body .category-pill {
 
   html body .with-tabs {
     padding-bottom: 72px !important;
+  }
+
+  html body .chat-screen.with-tabs {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 350px !important;
+    width: auto !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr) auto !important;
+    padding-bottom: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html body .chat-screen .messages {
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+
+  html body .chat-screen .chat-input {
+    align-self: end !important;
   }
 
   html body .quick-grid {

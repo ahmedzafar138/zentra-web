@@ -270,30 +270,155 @@ export function LogsScreen({
   );
 }
 
-export function AiScreen({ navigate, profile }: { navigate: (screen: AppScreen) => void; profile: Profile | null }) {
+const aiChatHistoryKey = (userId?: string | null) => `zentra:ai-chat-history:${userId ?? "guest"}`;
+
+function readLocalAiMessages(userId?: string | null): Message[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(aiChatHistoryKey(userId));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.map((message) => ({ ...message, timestamp: new Date(message.timestamp) }))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalAiMessages(userId: string | null | undefined, messages: Message[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(aiChatHistoryKey(userId), JSON.stringify(messages.slice(-80)));
+}
+
+export function AiScreen({ navigate, profile, user, showToast }: { navigate: (screen: AppScreen) => void; profile: Profile | null; user: User | null; showToast: (message: string) => void }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+
+  const persistLocalMessage = (message: Message) => {
+    setMessages((previous) => {
+      const next = [...previous, message];
+      writeLocalAiMessages(user?.id, next);
+      return next;
+    });
+  };
+
+  const ensureConversation = async (title: string) => {
+    if (conversationId) return conversationId;
+    if (!user || !hasSupabaseConfig) return null;
+
+    const { data, error } = await supabase
+      .from("ai_chat_conversations")
+      .insert({ user_id: user.id, title: title.slice(0, 80) || "Zentra AI Chat" })
+      .select("id")
+      .single();
+    if (error) throw error;
+    setConversationId(data.id);
+    return data.id as string;
+  };
+
+  const saveRemoteMessage = async (conversation_id: string | null, message: Message) => {
+    if (!conversation_id || !hasSupabaseConfig) return;
+    const { error } = await supabase.from("ai_chat_messages").insert({
+      conversation_id,
+      role: message.role,
+      content: message.content,
+      created_at: message.timestamp.toISOString(),
+    });
+    if (error) throw error;
+    await supabase.from("ai_chat_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversation_id);
+  };
+
+  useEffect(() => {
+    let active = true;
+    const loadChatHistory = async () => {
+      const localMessages = readLocalAiMessages(user?.id);
+      if (!user || !hasSupabaseConfig) {
+        if (active) setMessages(localMessages);
+        return;
+      }
+
+      const { data: conversations, error: conversationError } = await supabase
+        .from("ai_chat_conversations")
+        .select("id")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(1);
+
+      if (conversationError) {
+        if (active) setMessages(localMessages);
+        showToast(conversationError.message);
+        return;
+      }
+
+      const currentConversationId = conversations?.[0]?.id as string | undefined;
+      if (!currentConversationId) {
+        if (active) setMessages(localMessages);
+        return;
+      }
+
+      const { data: rows, error: messageError } = await supabase
+        .from("ai_chat_messages")
+        .select("id, role, content, created_at")
+        .eq("conversation_id", currentConversationId)
+        .order("created_at", { ascending: true });
+
+      if (messageError) {
+        if (active) setMessages(localMessages);
+        showToast(messageError.message);
+        return;
+      }
+
+      const remoteMessages = (rows ?? []).map((row) => ({
+        id: String(row.id),
+        role: row.role as "assistant" | "user",
+        content: String(row.content),
+        timestamp: new Date(row.created_at),
+      }));
+      if (active) {
+        setConversationId(currentConversationId);
+        setMessages(remoteMessages.length ? remoteMessages : localMessages);
+      }
+    };
+
+    void loadChatHistory();
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
 
   const send = async () => {
     if (!input.trim()) return;
     const text = input.trim();
+    const userMessage = { id: crypto.randomUUID(), role: "user" as const, content: text, timestamp: new Date() };
     setInput("");
-    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: text, timestamp: new Date() }]);
+    persistLocalMessage(userMessage);
     setTyping(true);
+    let currentConversationId: string | null = null;
     try {
+      try {
+        currentConversationId = await ensureConversation(text);
+        await saveRemoteMessage(currentConversationId, userMessage);
+      } catch (historyError) {
+        showToast(historyError instanceof Error ? historyError.message : "Could not save chat history.");
+      }
       const answer = await askZentra(text);
-      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", content: answer.answer, timestamp: new Date() }]);
+      const assistantMessage = { id: crypto.randomUUID(), role: "assistant" as const, content: answer.answer, timestamp: new Date() };
+      persistLocalMessage(assistantMessage);
+      try {
+        await saveRemoteMessage(currentConversationId, assistantMessage);
+      } catch (historyError) {
+        showToast(historyError instanceof Error ? historyError.message : "Could not save chat history.");
+      }
     } catch (error) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: error instanceof Error ? error.message : "Unable to reach Zentra AI right now.",
-          timestamp: new Date(),
-        },
-      ]);
+      const errorMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant" as const,
+        content: error instanceof Error ? error.message : "Unable to reach Zentra AI right now.",
+        timestamp: new Date(),
+      };
+      persistLocalMessage(errorMessage);
     } finally {
       setTyping(false);
     }

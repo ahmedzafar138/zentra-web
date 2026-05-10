@@ -273,7 +273,7 @@ export default function App() {
     <>
       {screen === "home" && <HomeScreen {...commonProps} />}
       {screen === "logs" && <LogsScreen {...commonProps} />}
-      {screen === "ai" && <AiScreen navigate={navigate} profile={profile} />}
+      {screen === "ai" && <AiScreen navigate={navigate} profile={profile} user={user} showToast={showToast} />}
       {screen === "history" && <HistoryScreen navigate={navigate} openLogsHistory={openLogsHistory} openStepsHistory={openStepsHistory} openMealHistory={openMealHistory} openSessionHistory={openSessionHistory} />}
       {screen === "profile" && <ProfileScreen {...commonProps} />}
       {screen === "steps" && <StepsScreen {...commonProps} />}
