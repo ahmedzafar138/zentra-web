@@ -16,20 +16,24 @@ The model is loaded once during FastAPI startup and reused across inference requ
 ```powershell
 cd model_gateway
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8010
-```
-
-For local debugging, start the API without loading TensorFlow immediately:
-
-```powershell
 $env:MODEL_GATEWAY_LOAD_MODELS_ON_STARTUP="false"
 uvicorn app.main:app --host 0.0.0.0 --port 8010
 ```
 
-Then trigger model loading separately:
+If port `8010` is already in use, the model gateway is probably already running.
+Check it with:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8010/health
+```
+
+To restart it manually, stop the process using port `8010` first, then run the command above.
+
+Trigger model loading separately:
 
 ```powershell
 Invoke-RestMethod -Method Post http://127.0.0.1:8010/api/v1/bicep-curl/load
+Invoke-RestMethod -Method Post http://127.0.0.1:8010/api/v1/squats/load
 ```
 
 ## CPU Runtime Notes

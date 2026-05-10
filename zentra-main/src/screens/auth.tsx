@@ -118,8 +118,6 @@ export function AuthScreen({
         password: form.password,
       });
       if (signInError) throw signInError;
-      if (data.user) await ensureProfile(data.user);
-      await routeForSession(data.session);
     } catch (authError) {
       setError(authError instanceof Error ? authError.message : "Authentication failed.");
     } finally {

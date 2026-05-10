@@ -51,6 +51,7 @@ class BicepCurlSessionState:
     correct_reps: int = 0
     incorrect_reps: int = 0
     last_prediction: BicepCurlPrediction | None = None
+    last_feedback: str = "Stand fully visible in the webcam frame."
 
     @property
     def phase(self) -> str:
@@ -210,8 +211,10 @@ class BicepCurlService:
             if state.down_count >= self.settings.bicep_curl_min_frames:
                 rep_completed = True
                 if len(state.frame_buffer) >= self.settings.bicep_curl_min_rep_frames:
+                    rep_feedback = self.analyze_rep(state.frame_buffer)
                     prediction = self.predict_rep(state.frame_buffer)
                     state.last_prediction = prediction
+                    state.last_feedback = "; ".join(rep_feedback)
                     state.rep_count += 1
                     if prediction.label == "correct":
                         state.correct_reps += 1
@@ -274,7 +277,7 @@ class BicepCurlService:
         with self._model_lock:
             probability = float(self.model.predict(sequence, verbose=0)[0][0])
 
-        if probability > 0.5:
+        if probability > 0.7:
             return BicepCurlPrediction(
                 label="correct",
                 probability=probability,
@@ -285,6 +288,52 @@ class BicepCurlService:
             probability=probability,
             confidence=1.0 - probability,
         )
+
+    def analyze_rep(self, frames: list[Any]) -> list[str]:
+        """Return lightweight form feedback using the same landmark sequence as infer.py."""
+
+        normalized_frames = [self._normalize_frame(frame) for frame in frames]
+        if len(normalized_frames) < 2:
+            return ["Keep moving through the full curl."]
+
+        sequence = np.asarray(normalized_frames, dtype=np.float32).reshape(
+            len(normalized_frames),
+            len(BICEP_SELECTED_LANDMARKS),
+            4,
+        )
+        angle_sequence = np.asarray(
+            [
+                self.calculate_angle(
+                    frame[RIGHT_SHOULDER_INDEX],
+                    frame[RIGHT_ELBOW_INDEX],
+                    frame[RIGHT_WRIST_INDEX],
+                )
+                for frame in sequence
+            ],
+            dtype=np.float32,
+        )
+
+        feedback: list[str] = []
+        minimum_angle = float(np.min(angle_sequence))
+        maximum_angle = float(np.max(angle_sequence))
+        if minimum_angle > 40:
+            feedback.append(f"Curl higher: elbow only reached {minimum_angle:.1f} degrees.")
+        if maximum_angle < 130:
+            feedback.append(f"Extend fully before the next rep: max angle {maximum_angle:.1f} degrees.")
+
+        velocity = np.diff(angle_sequence) * 30
+        if velocity.size:
+            if float(np.max(np.abs(velocity))) > 220:
+                feedback.append("Slow down and control the tempo.")
+            jerk = np.diff(velocity) * 30
+            if jerk.size and float(np.max(np.abs(jerk))) > 650:
+                feedback.append("Keep the movement smoother.")
+
+        wrist_minus_shoulder = sequence[:, RIGHT_WRIST_INDEX, :2] - sequence[:, RIGHT_SHOULDER_INDEX, :2]
+        if float(np.max(np.abs(wrist_minus_shoulder[:, 0]))) > 0.45:
+            feedback.append("Keep your upper arm steady and avoid swinging.")
+
+        return feedback or ["Good form."]
 
     def _resample_short_rep(self, frames: list[np.ndarray]) -> list[np.ndarray]:
         if not frames or self.reference_rep_len is None or len(frames) >= self.reference_rep_len:
@@ -333,6 +382,7 @@ class BicepCurlService:
             "buffered_frames": len(state.frame_buffer),
             "prediction": self._prediction_to_dict(prediction),
             "last_prediction": self._prediction_to_dict(state.last_prediction),
+            "feedback": state.last_feedback,
             "landmarks": self._landmarks_to_dict(landmarks),
         }
 

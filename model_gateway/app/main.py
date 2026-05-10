@@ -12,6 +12,11 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "1")
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.services.bicep_curl_service import get_bicep_curl_service
+from app.services.deadlift_service import get_deadlift_service
+from app.services.dumbbell_fly_service import get_dumbbell_fly_service
+from app.services.plank_service import get_plank_service
+from app.services.pushup_service import get_pushup_service
+from app.services.squat_service import get_squat_service
 
 
 logging.basicConfig(
@@ -26,10 +31,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Starting Zentra model gateway")
     if settings.load_models_on_startup:
         get_bicep_curl_service().load()
+        get_squat_service().load()
+        get_deadlift_service().load()
+        get_plank_service().load()
+        get_pushup_service().load()
+        get_dumbbell_fly_service().load()
     else:
         logger.warning(
-            "Model startup loading is disabled. Bicep curl endpoints will lazy-load "
-            "the model on first inference request."
+            "Model startup loading is disabled. Exercise endpoints will lazy-load "
+            "their models on first inference request."
         )
     yield
     logger.info("Stopping Zentra model gateway")
@@ -69,6 +79,11 @@ def health() -> dict[str, object]:
         "service": settings.app_name,
         "models": {
             "bicep_curl": get_bicep_curl_service().health(),
+            "squats": get_squat_service().health(),
+            "deadlifts": get_deadlift_service().health(),
+            "planks": get_plank_service().health(),
+            "pushups": get_pushup_service().health(),
+            "dumbbell_fly": get_dumbbell_fly_service().health(),
         },
     }
 

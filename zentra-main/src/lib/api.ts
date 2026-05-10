@@ -220,6 +220,41 @@ export function loadBicepCurlModel() {
   );
 }
 
+export function loadSquatModel() {
+  return postJson<Record<string, unknown>>(
+    MODEL_GATEWAY_API_BASE_URL,
+    "/api/v1/squats/load",
+  );
+}
+
+export function loadDeadliftModel() {
+  return postJson<Record<string, unknown>>(
+    MODEL_GATEWAY_API_BASE_URL,
+    "/api/v1/deadlifts/load",
+  );
+}
+
+export function loadPlankModel() {
+  return postJson<Record<string, unknown>>(
+    MODEL_GATEWAY_API_BASE_URL,
+    "/api/v1/planks/load",
+  );
+}
+
+export function loadPushupModel() {
+  return postJson<Record<string, unknown>>(
+    MODEL_GATEWAY_API_BASE_URL,
+    "/api/v1/pushups/load",
+  );
+}
+
+export function loadDumbbellFlyModel() {
+  return postJson<Record<string, unknown>>(
+    MODEL_GATEWAY_API_BASE_URL,
+    "/api/v1/dumbbell-fly/load",
+  );
+}
+
 
 export function startBicepCurlSession() {
   return postJson<BicepCurlSession>(

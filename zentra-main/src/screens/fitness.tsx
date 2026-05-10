@@ -1,7 +1,7 @@
 ﻿import { FormEvent, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { Activity, Award, BarChart3, BicepsFlexed, BotMessageSquare, Camera, Check, CheckCircle, CheckSquare, ChefHat, ChevronRight, Clock, Copy, Dumbbell, Eye, EyeOff, Flame, Footprints, History as HistoryIcon, Home, Loader2, LogOut, MessageCircle, Newspaper, Pause, Play, RefreshCw, RotateCcw, Send, Shirt, Sparkles, Square, TrendingUp, Trash2, User as UserIcon, UtensilsCrossed } from "lucide-react";
-import { DayMealPlan, WeeklyMealPlan, askZentra, checkAllServices, generateDailyMealPlan, generateDailyRecipes, generateShoppingList, generateWeeklyMealPlan, loadBicepCurlModel, MODEL_GATEWAY_API_BASE_URL, parseMealPlan, type RecipeResponse, type ServiceCheck, type ShoppingList } from "@/lib/api";
+import { DayMealPlan, WeeklyMealPlan, askZentra, checkAllServices, generateDailyMealPlan, generateDailyRecipes, generateShoppingList, generateWeeklyMealPlan, loadBicepCurlModel, loadDeadliftModel, loadDumbbellFlyModel, loadPlankModel, loadPushupModel, loadSquatModel, MODEL_GATEWAY_API_BASE_URL, parseMealPlan, type RecipeResponse, type ServiceCheck, type ShoppingList } from "@/lib/api";
 import { supabase, hasSupabaseConfig } from "@/lib/supabase";
 import { PrimaryButton, ScreenHeader, EmptyState, Stat } from "@/components/ui";
 import type { AppScreen, BlogPost, MealMeta, MetricPickerState, Message, Profile, SelectedMealRecipe, ExerciseLog, WorkoutSet } from "@/app/types";
@@ -434,6 +434,7 @@ const muscleGroups = [
   { name: "Triceps", exercises: 4, icon: Dumbbell },
   { name: "Chest", exercises: 5, icon: Shirt },
   { name: "Back", exercises: 5, icon: Activity },
+  { name: "Core", exercises: 1, icon: Activity },
   { name: "Shoulders", exercises: 5, icon: Dumbbell },
   { name: "Legs", exercises: 5, icon: Footprints },
 ];
@@ -441,10 +442,172 @@ const muscleGroups = [
 const exercisesByGroup: Record<string, string[]> = {
   Chest: ["Bench Press", "Push-ups", "Dumbbell Flyes", "Cable Crossover", "Incline Press"],
   Back: ["Pull-ups", "Bent Over Rows", "Lat Pulldown", "Deadlift", "Cable Rows"],
+  Core: ["Plank"],
   Shoulders: ["Overhead Press", "Lateral Raises", "Front Raises", "Arnold Press", "Shrugs"],
   Legs: ["Squats", "Lunges", "Leg Press", "Leg Curls", "Calf Raises"],
   Triceps: ["Tricep Dips", "Skull Crushers", "Overhead Extension", "Cable Pushdown"],
   Biceps: ["Bicep Curl", "Hammer Curl", "Preacher Curl", "Concentration Curl"],
+};
+
+type PoseLandmark = {
+  name: string;
+  x: number;
+  y: number;
+  z?: number;
+  visibility?: number;
+};
+
+const bicepLandmarkNames = [
+  "right_hip",
+  "left_hip",
+  "right_shoulder",
+  "left_shoulder",
+  "right_elbow",
+  "left_elbow",
+  "right_wrist",
+  "left_wrist",
+] as const;
+
+const squatLandmarkNames = [
+  "right_hip",
+  "left_hip",
+  "right_knee",
+  "left_knee",
+  "right_ankle",
+  "left_ankle",
+  "right_shoulder",
+  "left_shoulder",
+] as const;
+
+const deadliftLandmarkNames = [
+  "left_shoulder",
+  "left_elbow",
+  "left_wrist",
+  "left_hip",
+  "left_knee",
+  "left_ankle",
+  "left_heel",
+  "left_foot",
+  "right_shoulder",
+  "right_elbow",
+  "right_wrist",
+  "right_hip",
+  "right_knee",
+  "right_ankle",
+  "right_heel",
+  "right_foot",
+] as const;
+
+const plankLandmarkNames = [
+  "left_ear",
+  "left_shoulder",
+  "left_elbow",
+  "left_wrist",
+  "left_hip",
+  "left_knee",
+  "left_ankle",
+  "right_ear",
+  "right_shoulder",
+  "right_elbow",
+  "right_wrist",
+  "right_hip",
+  "right_knee",
+  "right_ankle",
+] as const;
+
+const pushupLandmarkNames = [
+  "nose",
+  "left_shoulder",
+  "right_shoulder",
+  "left_elbow",
+  "right_elbow",
+  "left_wrist",
+  "right_wrist",
+  "left_hip",
+  "right_hip",
+  "left_knee",
+  "right_knee",
+  "left_ankle",
+  "right_ankle",
+] as const;
+
+const dumbbellFlyLandmarkNames = [
+  "right_shoulder",
+  "left_shoulder",
+  "right_elbow",
+  "left_elbow",
+  "right_wrist",
+  "left_wrist",
+] as const;
+
+const skeletonConnections = [
+  ["left_shoulder", "right_shoulder"],
+  ["left_shoulder", "left_elbow"],
+  ["left_elbow", "left_wrist"],
+  ["right_shoulder", "right_elbow"],
+  ["right_elbow", "right_wrist"],
+  ["left_shoulder", "left_hip"],
+  ["right_shoulder", "right_hip"],
+  ["left_hip", "right_hip"],
+  ["left_hip", "left_knee"],
+  ["left_knee", "left_ankle"],
+  ["right_hip", "right_knee"],
+  ["right_knee", "right_ankle"],
+  ["left_ankle", "left_heel"],
+  ["left_heel", "left_foot"],
+  ["right_ankle", "right_heel"],
+  ["right_heel", "right_foot"],
+] as const;
+
+const minSkeletonVisibility = 0.05;
+
+type LiveExerciseSlug = "bicep-curl" | "squats" | "deadlifts" | "planks" | "pushups" | "dumbbell-fly";
+
+const normalizePoseLandmarks = (rawLandmarks: unknown, exerciseSlug: LiveExerciseSlug): PoseLandmark[] => {
+  if (!Array.isArray(rawLandmarks)) return [];
+  const fallbackNames =
+    exerciseSlug === "squats"
+      ? squatLandmarkNames
+      : exerciseSlug === "deadlifts"
+        ? deadliftLandmarkNames
+        : exerciseSlug === "planks"
+          ? plankLandmarkNames
+          : exerciseSlug === "pushups"
+            ? pushupLandmarkNames
+            : exerciseSlug === "dumbbell-fly"
+              ? dumbbellFlyLandmarkNames
+        : bicepLandmarkNames;
+
+  return rawLandmarks
+    .map((landmark, index): PoseLandmark | null => {
+      if (Array.isArray(landmark)) {
+        const [x, y, z, visibility] = landmark;
+        return {
+          name: fallbackNames[index] ?? `point_${index}`,
+          x: Number(x),
+          y: Number(y),
+          z: Number(z),
+          visibility: visibility == null ? 1 : Number(visibility),
+        };
+      }
+
+      if (landmark && typeof landmark === "object") {
+        const point = landmark as Partial<PoseLandmark>;
+        return {
+          name: String(point.name ?? fallbackNames[index] ?? `point_${index}`),
+          x: Number(point.x),
+          y: Number(point.y),
+          z: point.z == null ? undefined : Number(point.z),
+          visibility: point.visibility == null ? 1 : Number(point.visibility),
+        };
+      }
+
+      return null;
+    })
+    .filter((landmark): landmark is PoseLandmark => {
+      if (!landmark) return false;
+      return Number.isFinite(landmark.x) && Number.isFinite(landmark.y);
+    });
 };
 
 export function FormCorrectionScreen({
@@ -525,6 +688,7 @@ export function FormLiveScreen({
   const socketRef = useRef<WebSocket | null>(null);
   const frameTimerRef = useRef<number | null>(null);
   const recordingTimerRef = useRef<number | null>(null);
+  const liveRunRef = useRef(0);
   const [cameraActive, setCameraActive] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [status, setStatus] = useState("Webcam idle");
@@ -535,16 +699,37 @@ export function FormLiveScreen({
     angle: 0,
     feedback: "Stand fully visible in the webcam frame.",
   });
-  const modelConfig =
+  const [poseLandmarks, setPoseLandmarks] = useState<PoseLandmark[]>([]);
+  const modelConfig: { slug: LiveExerciseSlug; label: string; load: () => Promise<unknown> } | null =
     group === "Biceps" && exercise === "Bicep Curl"
       ? { slug: "bicep-curl", label: "bicep curl", load: loadBicepCurlModel }
+      : group === "Chest" && exercise === "Push-ups"
+        ? { slug: "pushups", label: "push-up", load: loadPushupModel }
+      : group === "Chest" && exercise === "Dumbbell Flyes"
+        ? { slug: "dumbbell-fly", label: "dumbbell fly", load: loadDumbbellFlyModel }
+      : group === "Back" && exercise === "Deadlift"
+        ? { slug: "deadlifts", label: "deadlift", load: loadDeadliftModel }
+      : group === "Core" && exercise === "Plank"
+        ? { slug: "planks", label: "plank", load: loadPlankModel }
+      : group === "Legs" && exercise === "Squats"
+        ? { slug: "squats", label: "squat", load: loadSquatModel }
         : null;
   const supportsInference = Boolean(modelConfig);
 
   const stopLive = () => {
+    liveRunRef.current += 1;
     if (frameTimerRef.current) window.clearInterval(frameTimerRef.current);
     if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
-    socketRef.current?.close();
+    const socket = socketRef.current;
+    if (socket) {
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) {
+        socket.close(1000, "Exercise changed");
+      }
+    }
     streamRef.current?.getTracks().forEach((track) => track.stop());
     frameTimerRef.current = null;
     recordingTimerRef.current = null;
@@ -552,16 +737,24 @@ export function FormLiveScreen({
     streamRef.current = null;
     setStreaming(false);
     setCameraActive(false);
+    setPoseLandmarks([]);
     setStatus("Webcam stopped");
   };
 
   useEffect(() => stopLive, []);
 
   useEffect(() => {
+    stopLive();
     setElapsedSeconds(0);
     setStats({ correct: 0, incorrect: 0, angle: 0, feedback: "Stand fully visible in the webcam frame." });
+    setPoseLandmarks([]);
     setStatus("Webcam idle");
   }, [group, exercise]);
+
+  const leaveLiveScreen = (next: AppScreen) => {
+    stopLive();
+    navigate(next);
+  };
 
   const startCamera = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -607,24 +800,31 @@ export function FormLiveScreen({
 
   const startInference = async () => {
     if (!supportsInference || !modelConfig) {
-      showToast("Live AI correction is currently wired for Bicep Curl. This exercise opens webcam preview only.");
+      showToast("Live AI correction is currently wired for Bicep Curl, Deadlift, Dumbbell Flyes, Plank, Push-ups, and Squats. This exercise opens webcam preview only.");
       return;
     }
+
+    const runId = liveRunRef.current + 1;
+    liveRunRef.current = runId;
 
     if (!cameraActive) {
       const started = await startCamera();
       if (!started) return;
+      if (liveRunRef.current !== runId) return;
     }
 
     try {
       setElapsedSeconds(0);
       setStats({ correct: 0, incorrect: 0, angle: 0, feedback: "Stand fully visible in the webcam frame." });
+      setPoseLandmarks([]);
       setStatus(`Loading ${modelConfig.label} model...`);
       await modelConfig.load();
+      if (liveRunRef.current !== runId) return;
       const url = `${MODEL_GATEWAY_API_BASE_URL.replace(/^http/, "ws")}/api/v1/${modelConfig.slug}/ws`;
       const socket = new WebSocket(url);
       socketRef.current = socket;
       socket.onopen = () => {
+        if (liveRunRef.current !== runId || socketRef.current !== socket) return;
         setStreaming(true);
         setStatus("AI correction streaming");
         if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
@@ -632,6 +832,7 @@ export function FormLiveScreen({
         frameTimerRef.current = window.setInterval(captureFrame, 220);
       };
       socket.onmessage = (event) => {
+        if (liveRunRef.current !== runId || socketRef.current !== socket) return;
         const payload = JSON.parse(event.data);
         if (payload.type === "session_started") {
           setStatus(`${modelConfig.label} session ready`);
@@ -639,10 +840,12 @@ export function FormLiveScreen({
         }
         if (payload.type === "error") {
           setStatus("AI correction paused");
+          setPoseLandmarks([]);
           setStats((current) => ({ ...current, feedback: String(payload.message ?? "Inference error") }));
           return;
         }
         if (payload.type === "frame_result") {
+          setPoseLandmarks(normalizePoseLandmarks(payload.landmarks, modelConfig.slug));
           setStats({
             correct: Number(payload.correct_reps ?? payload.correct ?? 0),
             incorrect: Number(payload.incorrect_reps ?? payload.incorrect ?? 0),
@@ -652,42 +855,107 @@ export function FormLiveScreen({
         }
       };
       socket.onerror = () => {
+        if (liveRunRef.current !== runId || socketRef.current !== socket) return;
         showToast(`Model gateway WebSocket is offline: ${url}`);
         setStatus("AI correction offline");
       };
       socket.onclose = () => {
+        if (liveRunRef.current !== runId || socketRef.current !== socket) return;
         if (frameTimerRef.current) window.clearInterval(frameTimerRef.current);
         if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
         frameTimerRef.current = null;
         recordingTimerRef.current = null;
+        socketRef.current = null;
         setStreaming(false);
       };
     } catch (error) {
+      if (liveRunRef.current !== runId) return;
       showToast(error instanceof Error ? error.message : "Unable to start live correction.");
       setStatus("AI correction offline");
     }
   };
 
+  const visibleLandmarks = poseLandmarks.filter(
+    (landmark) =>
+      Number.isFinite(landmark.x) &&
+      Number.isFinite(landmark.y) &&
+      (landmark.visibility ?? 1) >= minSkeletonVisibility,
+  );
+  const landmarkByName = new Map(visibleLandmarks.map((landmark) => [landmark.name, landmark]));
+  const hasSkeleton = visibleLandmarks.length >= 2;
+  const isPlank = modelConfig?.slug === "planks";
+  const plankFormStatus = stats.correct > 0 && stats.correct >= stats.incorrect ? "Correct" : stats.incorrect > 0 ? "Needs Fix" : "Waiting";
+  const plankFormTone = plankFormStatus === "Correct" ? "Good" : plankFormStatus === "Needs Fix" ? "Adjust" : "Ready";
+
   const feedbackItems = supportsInference
     ? [
         stats.feedback,
         stats.angle ? `Current angle: ${stats.angle} degrees` : "Keep your full body visible in frame.",
-        "Control tempo through the full curl.",
+        exercise === "Squats"
+          ? "Drive from the bottom back to a full standing position."
+          : exercise === "Deadlift"
+            ? "Use a side view and hinge at the hips."
+            : exercise === "Plank"
+              ? "Hold a straight side-view body line."
+              : exercise === "Push-ups"
+                ? "Use a side view and complete the full push-up range."
+                : exercise === "Dumbbell Flyes"
+                  ? "Open wide, close under control, then return to open."
+            : "Control tempo through the full curl.",
       ]
     : ["This exercise opens webcam preview only."];
 
   return (
     <section className="screen-pad with-tabs live-screen">
-      <ScreenHeader title={exercise} subtitle={`${group} form correction`} onBack={() => navigate("formExercises")} onLogo={() => navigate("home")} />
+      <ScreenHeader title={exercise} subtitle={`${group} form correction`} onBack={() => leaveLiveScreen("formExercises")} onLogo={() => leaveLiveScreen("home")} />
       <div className="live-camera">
-        <div className="rec-row"><span>{streaming ? "REC" : "READY"}</span><small>{formatDuration(elapsedSeconds)}</small><b>REPS {stats.correct + stats.incorrect}</b></div>
+        <div className="rec-row">
+          <span>{streaming ? "REC" : "READY"}</span>
+          <small>{formatDuration(elapsedSeconds)}</small>
+          <b>{isPlank ? plankFormTone : `REPS ${stats.correct + stats.incorrect}`}</b>
+        </div>
         <video ref={videoRef} autoPlay muted playsInline />
+        {hasSkeleton && (
+          <svg className="pose-skeleton" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
+            {skeletonConnections.map(([fromName, toName]) => {
+              const from = landmarkByName.get(fromName);
+              const to = landmarkByName.get(toName);
+              if (!from || !to) return null;
+              return (
+                <line
+                  key={`${fromName}-${toName}`}
+                  x1={1 - from.x}
+                  y1={from.y}
+                  x2={1 - to.x}
+                  y2={to.y}
+                />
+              );
+            })}
+            {visibleLandmarks.map((landmark) => (
+              <circle key={landmark.name} cx={1 - landmark.x} cy={landmark.y} r="0.017" />
+            ))}
+          </svg>
+        )}
+        {streaming && (
+          <div className={hasSkeleton ? "tracking-badge tracking-on" : "tracking-badge"}>
+            {hasSkeleton ? "Skeleton tracking" : "Searching for pose"}
+          </div>
+        )}
         {!cameraActive && <div className="camera-placeholder"><Camera size={52} /><span>Webcam preview</span><small>{exercise} - Live correction</small></div>}
         <canvas ref={canvasRef} hidden />
       </div>
       <div className="live-stats">
-        <Stat icon={CheckSquare} value={stats.correct} label="Correct" />
-        <Stat icon={Trash2} value={stats.incorrect} label="Incorrect" />
+        {isPlank ? (
+          <>
+            <Stat icon={CheckSquare} value={plankFormStatus} label="Form" />
+            <Stat icon={Activity} value={stats.angle ? `${stats.angle}deg` : "--"} label="Body Angle" />
+          </>
+        ) : (
+          <>
+            <Stat icon={CheckSquare} value={stats.correct} label="Correct" />
+            <Stat icon={Trash2} value={stats.incorrect} label="Incorrect" />
+          </>
+        )}
         <Stat icon={Activity} value={streaming ? "Live" : "Idle"} label="Status" />
       </div>
       <div className="feedback-card">
@@ -706,7 +974,7 @@ export function FormLiveScreen({
           {streaming ? <Pause size={18} /> : <Play size={18} />}
           {streaming ? "Pause Recording" : "Start Recording"}
         </PrimaryButton>
-        <button className="secondary-button span-all" onClick={() => navigate("formExercises")}>Switch Exercise</button>
+        <button className="secondary-button span-all" onClick={() => leaveLiveScreen("formExercises")}>Switch Exercise</button>
       </div>
     </section>
   );

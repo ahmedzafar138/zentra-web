@@ -30,15 +30,53 @@ import {
   WeeklyMealPlanScreen,
 } from "@/screens";
 
+const appScreensList = [
+  "home",
+  "logs",
+  "ai",
+  "history",
+  "profile",
+  "steps",
+  "blogs",
+  "blogDetail",
+  "mealPlan",
+  "mealWeekly",
+  "mealRecipe",
+  "mealDailyRecipes",
+  "mealShopping",
+  "formCorrection",
+  "formExercises",
+  "formLive",
+  "logsHistory",
+  "mealHistory",
+  "stepsHistory",
+] as const satisfies readonly AppScreen[];
+
+const appScreenSet = new Set<AppScreen>(appScreensList);
+const storedScreenKey = "zentra:last-screen";
+const storedMuscleGroupKey = "zentra:last-muscle-group";
+const storedExerciseKey = "zentra:last-exercise";
+
+const readStoredScreen = () => {
+  if (typeof window === "undefined") return null;
+  const value = window.sessionStorage.getItem(storedScreenKey) as AppScreen | null;
+  return value && appScreenSet.has(value) ? value : null;
+};
+
+const readStoredValue = (key: string, fallback: string) => {
+  if (typeof window === "undefined") return fallback;
+  return window.sessionStorage.getItem(key) || fallback;
+};
+
 export default function App() {
-  const [screen, setScreen] = useState<AppScreen>("splash");
+  const [screen, setScreen] = useState<AppScreen>(() => readStoredScreen() ?? "splash");
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [toast, setToast] = useState("");
-  const [selectedMuscleGroup, setSelectedMuscleGroup] = useState("Biceps");
-  const [selectedExercise, setSelectedExercise] = useState("Bicep Curl");
+  const [selectedMuscleGroup, setSelectedMuscleGroup] = useState(() => readStoredValue(storedMuscleGroupKey, "Biceps"));
+  const [selectedExercise, setSelectedExercise] = useState(() => readStoredValue(storedExerciseKey, "Bicep Curl"));
   const [metricPicker, setMetricPicker] = useState<MetricPickerState>(null);
   const [logsHistoryBackTo, setLogsHistoryBackTo] = useState<AppScreen>("history");
   const [stepsHistoryBackTo, setStepsHistoryBackTo] = useState<AppScreen>("history");
@@ -74,11 +112,13 @@ export default function App() {
 
   const ensureProfile = async (currentUser: User, fallback: Partial<Profile> = {}) => {
     if (!hasSupabaseConfig) return { first_name: fallback.first_name ?? currentUser.email?.split("@")[0] ?? "Zentra", last_name: fallback.last_name ?? null, height_cm: null, weight_kg: null, step_goal: 10000 };
-    const { data: existing } = await supabase
+    const { data: existing, error: fetchError } = await supabase
       .from("user_profiles")
       .select("*")
       .eq("id", currentUser.id)
       .maybeSingle();
+    if (fetchError) throw new Error(`Signed in, but profile lookup failed: ${fetchError.message}`);
+
     if (existing) {
       setProfile(existing as Profile);
       return existing as Profile;
@@ -90,12 +130,12 @@ export default function App() {
       .insert({ id: currentUser.id, first_name: fallback.first_name ?? fallbackName, last_name: fallback.last_name ?? null, step_goal: 10000 })
       .select("*")
       .single();
-    if (error) throw error;
+    if (error) throw new Error(`Signed in, but profile creation failed: ${error.message}`);
     setProfile(data as Profile);
     return data as Profile;
   };
 
-  const routeForSession = async (currentSession: Session | null) => {
+  const routeForSession = async (currentSession: Session | null, preferredScreen: AppScreen | null = readStoredScreen()) => {
     await new Promise((resolve) => setTimeout(resolve, 1500));
     if (!currentSession?.user) {
       setScreen("onboarding");
@@ -106,7 +146,7 @@ export default function App() {
     try {
       const loaded = await ensureProfile(currentSession.user);
       if (loaded?.onboarding_completed && loaded.height_cm && loaded.weight_kg) {
-        setScreen("home");
+        setScreen(preferredScreen ?? "home");
       } else {
         setScreen("bodyMetrics");
       }
@@ -129,12 +169,12 @@ export default function App() {
       routeForSession(data.session);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
-      if (nextSession?.user) {
+      if (nextSession?.user && event === "SIGNED_IN") {
         routeForSession(nextSession);
-      } else {
+      } else if (!nextSession?.user && event === "SIGNED_OUT") {
         setProfile(null);
         setScreen("auth");
       }
@@ -145,6 +185,20 @@ export default function App() {
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (appScreenSet.has(screen)) {
+      window.sessionStorage.setItem(storedScreenKey, screen);
+    }
+  }, [screen]);
+
+  useEffect(() => {
+    window.sessionStorage.setItem(storedMuscleGroupKey, selectedMuscleGroup);
+  }, [selectedMuscleGroup]);
+
+  useEffect(() => {
+    window.sessionStorage.setItem(storedExerciseKey, selectedExercise);
+  }, [selectedExercise]);
 
   const navigate = (next: AppScreen) => setScreen(next);
   const openLogsHistory = (backTo: AppScreen) => {

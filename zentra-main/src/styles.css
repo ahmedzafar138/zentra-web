@@ -1384,6 +1384,49 @@ small,
   transform: scaleX(-1);
 }
 
+.pose-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.pose-skeleton line {
+  stroke: var(--primary);
+  stroke-width: 0.012;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 0.018rem rgba(255, 122, 26, 0.95));
+}
+
+.pose-skeleton circle {
+  fill: var(--white);
+  stroke: var(--primary);
+  stroke-width: 0.006;
+  filter: drop-shadow(0 0 0.018rem rgba(255, 122, 26, 0.85));
+}
+
+.tracking-badge {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 2;
+  border: 1px solid rgba(255, 176, 32, 0.4);
+  border-radius: 999px;
+  padding: 8px 11px;
+  background: rgba(7, 4, 3, 0.72);
+  color: var(--warning);
+  font-size: 12px;
+  font-weight: 900;
+  backdrop-filter: blur(12px);
+}
+
+.tracking-on {
+  border-color: rgba(53, 208, 127, 0.42);
+  color: var(--success);
+}
+
 .camera-placeholder {
   position: absolute;
   inset: 0;
