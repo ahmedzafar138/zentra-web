@@ -2,6 +2,7 @@
   | "splash"
   | "onboarding"
   | "auth"
+  | "resetPassword"
   | "bodyMetrics"
   | "home"
   | "logs"

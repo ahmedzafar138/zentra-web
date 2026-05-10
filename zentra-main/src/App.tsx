@@ -24,6 +24,7 @@ import {
   MealShoppingScreen,
   OnboardingScreen,
   ProfileScreen,
+  ResetPasswordScreen,
   SplashScreen,
   StepsHistoryScreen,
   SessionHistoryScreen,
@@ -52,6 +53,7 @@ const appScreensList = [
   "mealHistory",
   "stepsHistory",
   "sessionHistory",
+  "resetPassword",
 ] as const satisfies readonly AppScreen[];
 
 const appScreenSet = new Set<AppScreen>(appScreensList);
@@ -59,9 +61,18 @@ const storedScreenKey = "zentra:last-screen";
 const storedMuscleGroupKey = "zentra:last-muscle-group";
 const storedExerciseKey = "zentra:last-exercise";
 
+const readRequestedScreen = () => {
+  if (typeof window === "undefined") return null;
+  const requestedScreen = new URLSearchParams(window.location.search).get("screen") as AppScreen | null;
+  return requestedScreen && appScreenSet.has(requestedScreen) ? requestedScreen : null;
+};
+
 const readStoredScreen = () => {
   if (typeof window === "undefined") return null;
+  const requestedScreen = readRequestedScreen();
+  if (requestedScreen) return requestedScreen;
   const value = window.sessionStorage.getItem(storedScreenKey) as AppScreen | null;
+  if (value === "resetPassword") return null;
   return value && appScreenSet.has(value) ? value : null;
 };
 
@@ -169,12 +180,21 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
       setSession(data.session);
+      if (readRequestedScreen() === "resetPassword" && data.session?.user) {
+        setUser(data.session.user);
+        setScreen("resetPassword");
+        return;
+      }
       routeForSession(data.session);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
+      if (event === "PASSWORD_RECOVERY" && nextSession?.user) {
+        setScreen("resetPassword");
+        return;
+      }
       if (nextSession?.user && event === "SIGNED_IN") {
         routeForSession(nextSession);
       } else if (!nextSession?.user && event === "SIGNED_OUT") {
@@ -190,7 +210,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (appScreenSet.has(screen)) {
+    if (appScreenSet.has(screen) && screen !== "resetPassword") {
       window.sessionStorage.setItem(storedScreenKey, screen);
     }
   }, [screen]);
@@ -203,7 +223,12 @@ export default function App() {
     window.sessionStorage.setItem(storedExerciseKey, selectedExercise);
   }, [selectedExercise]);
 
-  const navigate = (next: AppScreen) => setScreen(next);
+  const navigate = (next: AppScreen) => {
+    if (typeof window !== "undefined" && (!appScreenSet.has(next) || next === "resetPassword")) {
+      window.sessionStorage.removeItem(storedScreenKey);
+    }
+    setScreen(next);
+  };
   const openLogsHistory = (backTo: AppScreen) => {
     setLogsHistoryBackTo(backTo);
     setScreen("logsHistory");
@@ -327,6 +352,12 @@ export default function App() {
           routeForSession={routeForSession}
         />
       )}
+      {screen === "resetPassword" && (
+        <ResetPasswordScreen
+          navigate={navigate}
+          showToast={showToast}
+        />
+      )}
       {screen === "bodyMetrics" && user && (
         <BodyMetricsScreen
           user={user}
@@ -346,7 +377,7 @@ export default function App() {
           showToast={showToast}
         />
       )}
-      {!session && screen !== "auth" && screen !== "onboarding" && screen !== "splash" && (
+      {!session && screen !== "auth" && screen !== "resetPassword" && screen !== "onboarding" && screen !== "splash" && (
         <AuthScreen
           navigate={navigate}
           showToast={showToast}

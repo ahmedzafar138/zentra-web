@@ -92,7 +92,10 @@ export function AuthScreen({
     setLoading(true);
     try {
       if (mode === "forgot") {
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(form.email);
+        const redirectTo = `${window.location.origin}${window.location.pathname}?screen=resetPassword`;
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(form.email, {
+          redirectTo,
+        });
         if (resetError) throw resetError;
         showToast("Password reset email sent.");
         setMode("login");
@@ -190,6 +193,87 @@ export function AuthScreen({
       <button className="text-link" onClick={() => setMode(mode === "forgot" ? "login" : "forgot")}>
         {mode === "forgot" ? "Remembered your password?" : "Forgot password?"}
       </button>
+    </section>
+  );
+}
+
+export function ResetPasswordScreen({
+  navigate,
+  showToast,
+}: {
+  navigate: (screen: AppScreen) => void;
+  showToast: (message: string) => void;
+}) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) throw updateError;
+      showToast("Password updated. Please log in with your new password.");
+      await supabase.auth.signOut();
+      window.history.replaceState({}, document.title, window.location.pathname);
+      navigate("auth");
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : "Could not update password.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="screen-pad auth-screen">
+      <div className="auth-logo">Zentra</div>
+      <form className="form-stack" onSubmit={submit}>
+        <h2 className="center-title">Reset Password</h2>
+        <p className="muted">Enter a new password for your Zentra account.</p>
+        {error && <div className="error-box">{error}</div>}
+        <label>
+          New Password
+          <span className="password-field">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              minLength={8}
+            />
+            <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label="Toggle password">
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </span>
+        </label>
+        <label>
+          Re-enter Password
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            required
+            minLength={8}
+          />
+        </label>
+        <PrimaryButton type="submit" disabled={saving}>
+          {saving ? <Loader2 className="spin" size={18} /> : "Update Password"}
+        </PrimaryButton>
+      </form>
+      <button className="text-link" onClick={() => navigate("auth")}>Back to login</button>
     </section>
   );
 }
