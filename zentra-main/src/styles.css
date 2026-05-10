@@ -1687,6 +1687,7 @@ small,
 .blog-image-fallback {
   width: 100%;
   aspect-ratio: 16 / 10;
+  display: block;
   object-fit: cover;
   background: radial-gradient(circle at 50% 20%, rgba(255, 122, 26, 0.24), transparent 13rem), #100a07;
 }
@@ -1721,6 +1722,10 @@ small,
   color: var(--primary);
   font-size: 12px;
   font-weight: 900;
+}
+
+.blog-more-button {
+  margin-top: 22px;
 }
 
 .blog-detail {

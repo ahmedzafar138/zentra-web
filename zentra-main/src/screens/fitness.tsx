@@ -1421,14 +1421,28 @@ function stripBlogHtml(value = "") {
   return document.body.textContent?.replace(/\s+/g, " ").trim() ?? "";
 }
 
+function getBlogImage(post: any): string | null {
+  const media = post._embedded?.["wp:featuredmedia"]?.[0];
+  return (
+    post.jetpack_featured_media_url ||
+    media?.media_details?.sizes?.medium_large?.source_url ||
+    media?.media_details?.sizes?.large?.source_url ||
+    media?.media_details?.sizes?.full?.source_url ||
+    media?.source_url ||
+    post.yoast_head_json?.og_image?.[0]?.url ||
+    null
+  );
+}
+
 export function BlogsScreen({ navigate, showToast, selectBlog }: { navigate: (screen: AppScreen) => void; showToast: (message: string) => void; selectBlog: (blog: BlogPost) => void }) {
   const [blogs, setBlogs] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(6);
 
   const loadBlogs = async () => {
     setLoading(true);
     try {
-      const response = await fetch("https://www.nerdfitness.com/wp-json/wp/v2/posts?per_page=12&_embed=1");
+      const response = await fetch("https://www.nerdfitness.com/wp-json/wp/v2/posts?per_page=18&_embed=1");
       if (!response.ok) throw new Error(`Blog API failed with ${response.status}`);
       const data = await response.json();
       setBlogs(
@@ -1440,9 +1454,11 @@ export function BlogsScreen({ navigate, showToast, selectBlog }: { navigate: (sc
           category: "Fitness",
           read_time_min: Math.max(3, Math.round((post.content?.rendered?.length ?? 2500) / 1200)),
           published_at: post.date,
-          thumbnail_url: post._embedded?.["wp:featuredmedia"]?.[0]?.source_url ?? null,
+          thumbnail_url: getBlogImage(post),
+          image_url: getBlogImage(post),
         })),
       );
+      setVisibleCount(6);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Could not load blogs.");
       setBlogs([]);
@@ -1457,6 +1473,7 @@ export function BlogsScreen({ navigate, showToast, selectBlog }: { navigate: (sc
 
   const formatDate = (value: string) =>
     new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const visibleBlogs = blogs.slice(0, visibleCount);
 
   return (
     <section className="screen-pad with-tabs">
@@ -1470,7 +1487,7 @@ export function BlogsScreen({ navigate, showToast, selectBlog }: { navigate: (sc
       {loading ? <p className="empty-text">Loading latest fitness articles...</p> : null}
       {!loading && blogs.length === 0 ? <EmptyState title="No blog posts found" body="The blog API did not return articles right now." /> : null}
       <div className="blog-grid">
-        {blogs.map((post) => {
+        {visibleBlogs.map((post) => {
           const image = post.thumbnail_url ?? post.image_url;
           return (
             <button className="blog-card blog-card-button" key={post.id} onClick={() => selectBlog(post)}>
@@ -1485,6 +1502,11 @@ export function BlogsScreen({ navigate, showToast, selectBlog }: { navigate: (sc
           );
         })}
       </div>
+      {!loading && blogs.length > visibleBlogs.length ? (
+        <button className="secondary-button centered blog-more-button" onClick={() => setVisibleCount((count) => count + 6)}>
+          Show more blogs
+        </button>
+      ) : null}
     </section>
   );
 }
