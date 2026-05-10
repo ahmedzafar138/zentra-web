@@ -336,14 +336,17 @@ export function HistoryScreen({
   openLogsHistory,
   openStepsHistory,
   openMealHistory,
+  openSessionHistory,
 }: {
   navigate: (screen: AppScreen) => void;
   openLogsHistory: (backTo: AppScreen) => void;
   openStepsHistory: (backTo: AppScreen) => void;
   openMealHistory: (backTo: AppScreen) => void;
+  openSessionHistory: (backTo: AppScreen) => void;
 }) {
   const options = [
     { icon: BarChart3, title: "Logs History", subtitle: "View your workout history", screen: "logsHistory" as AppScreen },
+    { icon: HistoryIcon, title: "Session History", subtitle: "View live form correction summaries", screen: "sessionHistory" as AppScreen },
     { icon: UtensilsCrossed, title: "Meal History", subtitle: "View your saved meal plans", screen: "mealHistory" as AppScreen },
     { icon: Footprints, title: "Steps History", subtitle: "View your step tracking history", screen: "stepsHistory" as AppScreen },
   ];
@@ -360,6 +363,8 @@ export function HistoryScreen({
               onClick={() =>
                 option.screen === "logsHistory"
                   ? openLogsHistory("history")
+                  : option.screen === "sessionHistory"
+                    ? openSessionHistory("history")
                   : option.screen === "stepsHistory"
                     ? openStepsHistory("history")
                     : openMealHistory("history")

@@ -1215,6 +1215,50 @@ small,
   color: var(--secondary);
 }
 
+.session-summary-strip,
+.session-history-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--inactive);
+  border-radius: 18px;
+  padding: 16px;
+  background: var(--card);
+}
+
+.session-summary-strip,
+.session-history-metrics {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.session-history-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.session-history-head div {
+  display: grid;
+  gap: 4px;
+}
+
+.session-history-head span {
+  color: var(--primary);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.session-history-metrics {
+  display: grid;
+  gap: 10px;
+}
+
+.session-history-card p {
+  margin: 0;
+  color: var(--secondary);
+  line-height: 1.45;
+}
+
 .danger-icon {
   color: var(--danger) !important;
 }

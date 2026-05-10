@@ -4,7 +4,7 @@ import { Activity, Award, BarChart3, BicepsFlexed, BotMessageSquare, Camera, Che
 import { DayMealPlan, WeeklyMealPlan, askZentra, checkAllServices, generateDailyMealPlan, generateDailyRecipes, generateShoppingList, generateWeeklyMealPlan, loadBicepCurlModel, loadDeadliftModel, loadDumbbellFlyModel, loadPlankModel, loadPushupModel, loadSquatModel, MODEL_GATEWAY_API_BASE_URL, parseMealPlan, type RecipeResponse, type ServiceCheck, type ShoppingList } from "@/lib/api";
 import { supabase, hasSupabaseConfig } from "@/lib/supabase";
 import { PrimaryButton, ScreenHeader, EmptyState, Stat } from "@/components/ui";
-import type { AppScreen, BlogPost, MealMeta, MetricPickerState, Message, Profile, SelectedMealRecipe, ExerciseLog, WorkoutSet } from "@/app/types";
+import type { AppScreen, BlogPost, FormSessionSummary, MealMeta, MetricPickerState, Message, Profile, SelectedMealRecipe, ExerciseLog, WorkoutSet } from "@/app/types";
 import { bmiCategory, calculateBmi, formatDuration, formatHeightValue, formatWeightValue, monthKey, todayKey } from "@/app/utils";
 export function MealPlanScreen({
   user,
@@ -560,6 +560,60 @@ const skeletonConnections = [
 ] as const;
 
 const minSkeletonVisibility = 0.05;
+const sessionHistoryLimit = 80;
+
+const sessionHistoryKey = (userId?: string | null) => `zentra:form-session-history:${userId ?? "guest"}`;
+
+function readSessionHistory(userId?: string | null): FormSessionSummary[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(sessionHistoryKey(userId));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSessionHistory(userId: string | null | undefined, rows: FormSessionSummary[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(sessionHistoryKey(userId), JSON.stringify(rows.slice(0, sessionHistoryLimit)));
+}
+
+function mapFormSessionRow(row: any): FormSessionSummary {
+  return {
+    id: String(row.id),
+    user_id: row.user_id,
+    group: row.group_name ?? row.group,
+    exercise: row.exercise_name ?? row.exercise,
+    started_at: row.started_at,
+    ended_at: row.ended_at,
+    duration_seconds: Number(row.duration_seconds ?? 0),
+    total_reps: Number(row.total_reps ?? 0),
+    correct_reps: Number(row.correct_reps ?? 0),
+    incorrect_reps: Number(row.incorrect_reps ?? 0),
+    feedback: row.feedback ?? undefined,
+  };
+}
+
+async function saveSessionSummary(summary: FormSessionSummary) {
+  const rows = readSessionHistory(summary.user_id);
+  writeSessionHistory(summary.user_id, [summary, ...rows]);
+
+  if (!summary.user_id || !hasSupabaseConfig) return;
+  await supabase.from("user_form_sessions").insert({
+    user_id: summary.user_id,
+    group_name: summary.group,
+    exercise_name: summary.exercise,
+    started_at: summary.started_at,
+    ended_at: summary.ended_at,
+    duration_seconds: summary.duration_seconds,
+    total_reps: summary.total_reps,
+    correct_reps: summary.correct_reps,
+    incorrect_reps: summary.incorrect_reps,
+    feedback: summary.feedback,
+  });
+}
 
 type LiveExerciseSlug = "bicep-curl" | "squats" | "deadlifts" | "planks" | "pushups" | "dumbbell-fly";
 
@@ -674,11 +728,13 @@ export function FormExercisesScreen({
 export function FormLiveScreen({
   group,
   exercise,
+  user,
   navigate,
   showToast,
 }: {
   group: string;
   exercise: string;
+  user: User | null;
   navigate: (screen: AppScreen) => void;
   showToast: (message: string) => void;
 }) {
@@ -689,6 +745,15 @@ export function FormLiveScreen({
   const frameTimerRef = useRef<number | null>(null);
   const recordingTimerRef = useRef<number | null>(null);
   const liveRunRef = useRef(0);
+  const sessionStartedAtRef = useRef<number | null>(null);
+  const sessionSavedRef = useRef(true);
+  const sessionMetaRef = useRef<{ group: string; exercise: string; userId?: string }>({ group, exercise, userId: user?.id });
+  const statsRef = useRef({
+    correct: 0,
+    incorrect: 0,
+    angle: 0,
+    feedback: "Stand fully visible in the webcam frame.",
+  });
   const [cameraActive, setCameraActive] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [status, setStatus] = useState("Webcam idle");
@@ -716,7 +781,43 @@ export function FormLiveScreen({
         : null;
   const supportsInference = Boolean(modelConfig);
 
+  const updateStats = (nextStats: typeof stats) => {
+    statsRef.current = nextStats;
+    setStats(nextStats);
+  };
+
+  const saveCurrentSession = () => {
+    const startedAt = sessionStartedAtRef.current;
+    if (!startedAt || sessionSavedRef.current) return;
+
+    const endedAt = Date.now();
+    const durationSeconds = Math.max(1, Math.round((endedAt - startedAt) / 1000));
+    const currentStats = statsRef.current;
+    const sessionMeta = sessionMetaRef.current;
+    const totalReps = currentStats.correct + currentStats.incorrect;
+    if (durationSeconds < 3 && totalReps === 0) {
+      sessionSavedRef.current = true;
+      return;
+    }
+
+    void saveSessionSummary({
+      id: `${startedAt}-${sessionMeta.exercise.replace(/\s+/g, "-").toLowerCase()}`,
+      user_id: sessionMeta.userId,
+      group: sessionMeta.group,
+      exercise: sessionMeta.exercise,
+      started_at: new Date(startedAt).toISOString(),
+      ended_at: new Date(endedAt).toISOString(),
+      duration_seconds: durationSeconds,
+      total_reps: totalReps,
+      correct_reps: currentStats.correct,
+      incorrect_reps: currentStats.incorrect,
+      feedback: currentStats.feedback,
+    });
+    sessionSavedRef.current = true;
+  };
+
   const stopLive = () => {
+    saveCurrentSession();
     liveRunRef.current += 1;
     if (frameTimerRef.current) window.clearInterval(frameTimerRef.current);
     if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
@@ -739,6 +840,7 @@ export function FormLiveScreen({
     setCameraActive(false);
     setPoseLandmarks([]);
     setStatus("Webcam stopped");
+    sessionStartedAtRef.current = null;
   };
 
   useEffect(() => stopLive, []);
@@ -746,7 +848,7 @@ export function FormLiveScreen({
   useEffect(() => {
     stopLive();
     setElapsedSeconds(0);
-    setStats({ correct: 0, incorrect: 0, angle: 0, feedback: "Stand fully visible in the webcam frame." });
+    updateStats({ correct: 0, incorrect: 0, angle: 0, feedback: "Stand fully visible in the webcam frame." });
     setPoseLandmarks([]);
     setStatus("Webcam idle");
   }, [group, exercise]);
@@ -815,11 +917,14 @@ export function FormLiveScreen({
 
     try {
       setElapsedSeconds(0);
-      setStats({ correct: 0, incorrect: 0, angle: 0, feedback: "Stand fully visible in the webcam frame." });
+      updateStats({ correct: 0, incorrect: 0, angle: 0, feedback: "Stand fully visible in the webcam frame." });
       setPoseLandmarks([]);
       setStatus(`Loading ${modelConfig.label} model...`);
       await modelConfig.load();
       if (liveRunRef.current !== runId) return;
+      sessionStartedAtRef.current = Date.now();
+      sessionSavedRef.current = false;
+      sessionMetaRef.current = { group, exercise, userId: user?.id };
       const url = `${MODEL_GATEWAY_API_BASE_URL.replace(/^http/, "ws")}/api/v1/${modelConfig.slug}/ws`;
       const socket = new WebSocket(url);
       socketRef.current = socket;
@@ -841,12 +946,12 @@ export function FormLiveScreen({
         if (payload.type === "error") {
           setStatus("AI correction paused");
           setPoseLandmarks([]);
-          setStats((current) => ({ ...current, feedback: String(payload.message ?? "Inference error") }));
+          updateStats({ ...statsRef.current, feedback: String(payload.message ?? "Inference error") });
           return;
         }
         if (payload.type === "frame_result") {
           setPoseLandmarks(normalizePoseLandmarks(payload.landmarks, modelConfig.slug));
-          setStats({
+          updateStats({
             correct: Number(payload.correct_reps ?? payload.correct ?? 0),
             incorrect: Number(payload.incorrect_reps ?? payload.incorrect ?? 0),
             angle: Math.round(Number(payload.angle ?? 0)),
@@ -1204,6 +1309,105 @@ export function StepsHistoryScreen({ user, navigate, showToast, backTo }: { user
   }, [user?.id]);
   const totals = rows.reduce((sum, row) => ({ steps: sum.steps + Number(row.steps ?? 0), km: sum.km + Number(row.distance_km ?? 0), kcal: sum.kcal + Number(row.kcal ?? 0) }), { steps: 0, km: 0, kcal: 0 });
   return <HistoryList title="Steps History" navigate={navigate} empty="No step history yet" backTo={backTo}><div className="summary-card"><Stat icon={Footprints} value={totals.steps.toLocaleString()} label="Total Steps" /><Stat icon={Activity} value={totals.km.toFixed(1)} label="Kilometers" /><Stat icon={Flame} value={Math.round(totals.kcal)} label="Calories" /></div>{rows.map((row) => <article className="list-card" key={row.id}><strong>{row.date}</strong><p>{Number(row.steps).toLocaleString()} / {Number(row.goal).toLocaleString()} steps</p></article>)}</HistoryList>;
+}
+
+export function SessionHistoryScreen({ user, navigate, showToast, backTo = "history" }: { user: User | null; navigate: (screen: AppScreen) => void; showToast: (message: string) => void; backTo?: AppScreen }) {
+  const [rows, setRows] = useState<FormSessionSummary[]>([]);
+
+  const loadRows = async () => {
+    const localRows = readSessionHistory(user?.id);
+    if (!user || !hasSupabaseConfig) {
+      setRows(localRows);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("user_form_sessions")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("started_at", { ascending: false });
+
+    if (error) {
+      setRows(localRows);
+      showToast(error.message);
+      return;
+    }
+
+    const remoteRows = (data ?? []).map(mapFormSessionRow);
+    setRows(remoteRows.length ? remoteRows : localRows);
+  };
+
+  useEffect(() => {
+    void loadRows();
+  }, [user?.id]);
+
+  const clearHistory = async () => {
+    if (user && hasSupabaseConfig) {
+      const { error } = await supabase.from("user_form_sessions").delete().eq("user_id", user.id);
+      if (error) {
+        showToast(error.message);
+        return;
+      }
+    }
+    writeSessionHistory(user?.id, []);
+    setRows([]);
+  };
+
+  const totals = rows.reduce(
+    (sum, row) => ({
+      sessions: sum.sessions + 1,
+      reps: sum.reps + row.total_reps,
+      correct: sum.correct + row.correct_reps,
+      incorrect: sum.incorrect + row.incorrect_reps,
+      seconds: sum.seconds + row.duration_seconds,
+    }),
+    { sessions: 0, reps: 0, correct: 0, incorrect: 0, seconds: 0 },
+  );
+  const accuracy = totals.reps ? Math.round((totals.correct / totals.reps) * 100) : 0;
+
+  return (
+    <section className="screen-pad with-tabs">
+      <ScreenHeader
+        title="Session History"
+        subtitle="Live correction summaries"
+        onBack={() => navigate(backTo)}
+        onLogo={() => navigate("home")}
+        action={rows.length ? <button className="text-link" onClick={clearHistory}>Clear</button> : undefined}
+      />
+      {rows.length === 0 ? (
+        <EmptyState title="No live sessions yet" body="Start a form correction recording and stop it to save a summary here." />
+      ) : (
+        <div className="list-stack">
+          <div className="summary-card session-summary-strip">
+            <Stat icon={HistoryIcon} value={totals.sessions} label="Sessions" />
+            <Stat icon={CheckSquare} value={totals.reps} label="Total Reps" />
+            <Stat icon={Award} value={`${accuracy}%`} label="Accuracy" />
+          </div>
+          {rows.map((row) => {
+            const started = new Date(row.started_at);
+            const isRepSession = row.total_reps > 0 || row.exercise !== "Plank";
+            return (
+              <article className="session-history-card" key={row.id}>
+                <div className="session-history-head">
+                  <div>
+                    <strong>{row.exercise}</strong>
+                    <small>{row.group} - {started.toLocaleString()}</small>
+                  </div>
+                  <span>{formatDuration(row.duration_seconds)}</span>
+                </div>
+                <div className="session-history-metrics">
+                  <Stat icon={Dumbbell} value={isRepSession ? row.total_reps : "--"} label={isRepSession ? "Reps" : "Reps"} />
+                  <Stat icon={CheckSquare} value={row.correct_reps} label="Correct" />
+                  <Stat icon={Trash2} value={row.incorrect_reps} label="Incorrect" />
+                </div>
+                {row.feedback ? <p>{row.feedback}</p> : null}
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function HistoryList({ title, navigate, empty, children, backTo = "history" }: { title: string; navigate: (screen: AppScreen) => void; empty: string; children: React.ReactNode; backTo?: AppScreen }) {

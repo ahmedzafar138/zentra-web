@@ -21,7 +21,8 @@
   | "formLive"
   | "logsHistory"
   | "mealHistory"
-  | "stepsHistory";
+  | "stepsHistory"
+  | "sessionHistory";
 
 export type Tab = "home" | "logs" | "ai" | "history" | "profile";
 
@@ -58,6 +59,20 @@ export type ExerciseLog = {
   name: string;
   equipment?: string;
   sets: WorkoutSet[];
+};
+
+export type FormSessionSummary = {
+  id: string;
+  user_id?: string;
+  group: string;
+  exercise: string;
+  started_at: string;
+  ended_at: string;
+  duration_seconds: number;
+  total_reps: number;
+  correct_reps: number;
+  incorrect_reps: number;
+  feedback?: string;
 };
 
 export type Message = {

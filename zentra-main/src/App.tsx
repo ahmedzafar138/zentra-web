@@ -26,6 +26,7 @@ import {
   ProfileScreen,
   SplashScreen,
   StepsHistoryScreen,
+  SessionHistoryScreen,
   StepsScreen,
   WeeklyMealPlanScreen,
 } from "@/screens";
@@ -50,6 +51,7 @@ const appScreensList = [
   "logsHistory",
   "mealHistory",
   "stepsHistory",
+  "sessionHistory",
 ] as const satisfies readonly AppScreen[];
 
 const appScreenSet = new Set<AppScreen>(appScreensList);
@@ -81,6 +83,7 @@ export default function App() {
   const [logsHistoryBackTo, setLogsHistoryBackTo] = useState<AppScreen>("history");
   const [stepsHistoryBackTo, setStepsHistoryBackTo] = useState<AppScreen>("history");
   const [mealHistoryBackTo, setMealHistoryBackTo] = useState<AppScreen>("history");
+  const [sessionHistoryBackTo, setSessionHistoryBackTo] = useState<AppScreen>("history");
   const [selectedBlog, setSelectedBlog] = useState<BlogPost | null>(null);
   const [generatedMealPlan, setGeneratedMealPlan] = useState<WeeklyMealPlan | null>(null);
   const [mealMeta, setMealMeta] = useState<MealMeta>({ culinary: "Any", diet: "None", goal: "", planType: "daily" });
@@ -213,6 +216,10 @@ export default function App() {
     setMealHistoryBackTo(backTo);
     setScreen("mealHistory");
   };
+  const openSessionHistory = (backTo: AppScreen) => {
+    setSessionHistoryBackTo(backTo);
+    setScreen("sessionHistory");
+  };
 
   const activeTab: Tab | null =
     screen === "home" ||
@@ -228,7 +235,7 @@ export default function App() {
     screen === "formExercises" ||
     screen === "formLive"
       ? "home"
-      : screen === "logs" || screen === "logsHistory" || screen === "mealHistory" || screen === "stepsHistory"
+      : screen === "logs" || screen === "logsHistory" || screen === "mealHistory" || screen === "stepsHistory" || screen === "sessionHistory"
         ? "logs"
         : screen === "ai"
           ? "ai"
@@ -250,6 +257,7 @@ export default function App() {
     openLogsHistory,
     openStepsHistory,
     openMealHistory,
+    openSessionHistory,
     generatedMealPlan,
     setGeneratedMealPlan,
     mealMeta,
@@ -266,7 +274,7 @@ export default function App() {
       {screen === "home" && <HomeScreen {...commonProps} />}
       {screen === "logs" && <LogsScreen {...commonProps} />}
       {screen === "ai" && <AiScreen navigate={navigate} profile={profile} />}
-      {screen === "history" && <HistoryScreen navigate={navigate} openLogsHistory={openLogsHistory} openStepsHistory={openStepsHistory} openMealHistory={openMealHistory} />}
+      {screen === "history" && <HistoryScreen navigate={navigate} openLogsHistory={openLogsHistory} openStepsHistory={openStepsHistory} openMealHistory={openMealHistory} openSessionHistory={openSessionHistory} />}
       {screen === "profile" && <ProfileScreen {...commonProps} />}
       {screen === "steps" && <StepsScreen {...commonProps} />}
       {screen === "blogs" && <BlogsScreen navigate={navigate} showToast={showToast} selectBlog={(blog) => { setSelectedBlog(blog); navigate("blogDetail"); }} />}
@@ -294,6 +302,7 @@ export default function App() {
         <FormLiveScreen
           group={selectedMuscleGroup}
           exercise={selectedExercise}
+          user={user}
           navigate={navigate}
           showToast={showToast}
         />
@@ -301,6 +310,7 @@ export default function App() {
       {screen === "logsHistory" && <LogsHistoryScreen user={user} navigate={navigate} showToast={showToast} backTo={logsHistoryBackTo} />}
       {screen === "mealHistory" && <MealHistoryScreen user={user} navigate={navigate} showToast={showToast} backTo={mealHistoryBackTo} />}
       {screen === "stepsHistory" && <StepsHistoryScreen user={user} navigate={navigate} showToast={showToast} backTo={stepsHistoryBackTo} />}
+      {screen === "sessionHistory" && <SessionHistoryScreen user={user} navigate={navigate} showToast={showToast} backTo={sessionHistoryBackTo} />}
     </>
   );
 
