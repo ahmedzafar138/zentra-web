@@ -734,7 +734,12 @@ small,
   grid-template-rows: auto 1fr auto;
 }
 
+.chat-screen.with-tabs {
+  padding-bottom: 0;
+}
+
 .messages {
+  min-height: 0;
   padding: 16px 24px;
   display: flex;
   flex-direction: column;
@@ -768,7 +773,7 @@ small,
   display: grid;
   grid-template-columns: 1fr 44px;
   gap: 12px;
-  padding: 10px 18px 92px;
+  padding: 10px 18px 14px;
   background: var(--card);
 }
 
@@ -1215,6 +1220,50 @@ small,
   color: var(--secondary);
 }
 
+.session-summary-strip,
+.session-history-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--inactive);
+  border-radius: 18px;
+  padding: 16px;
+  background: var(--card);
+}
+
+.session-summary-strip,
+.session-history-metrics {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.session-history-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.session-history-head div {
+  display: grid;
+  gap: 4px;
+}
+
+.session-history-head span {
+  color: var(--primary);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.session-history-metrics {
+  display: grid;
+  gap: 10px;
+}
+
+.session-history-card p {
+  margin: 0;
+  color: var(--secondary);
+  line-height: 1.45;
+}
+
 .danger-icon {
   color: var(--danger) !important;
 }
@@ -1382,6 +1431,49 @@ small,
   height: 100%;
   object-fit: cover;
   transform: scaleX(-1);
+}
+
+.pose-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.pose-skeleton line {
+  stroke: var(--primary);
+  stroke-width: 0.012;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 0.018rem rgba(255, 122, 26, 0.95));
+}
+
+.pose-skeleton circle {
+  fill: var(--white);
+  stroke: var(--primary);
+  stroke-width: 0.006;
+  filter: drop-shadow(0 0 0.018rem rgba(255, 122, 26, 0.85));
+}
+
+.tracking-badge {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 2;
+  border: 1px solid rgba(255, 176, 32, 0.4);
+  border-radius: 999px;
+  padding: 8px 11px;
+  background: rgba(7, 4, 3, 0.72);
+  color: var(--warning);
+  font-size: 12px;
+  font-weight: 900;
+  backdrop-filter: blur(12px);
+}
+
+.tracking-on {
+  border-color: rgba(53, 208, 127, 0.42);
+  color: var(--success);
 }
 
 .camera-placeholder {
@@ -1595,6 +1687,7 @@ small,
 .blog-image-fallback {
   width: 100%;
   aspect-ratio: 16 / 10;
+  display: block;
   object-fit: cover;
   background: radial-gradient(circle at 50% 20%, rgba(255, 122, 26, 0.24), transparent 13rem), #100a07;
 }
@@ -1629,6 +1722,10 @@ small,
   color: var(--primary);
   font-size: 12px;
   font-weight: 900;
+}
+
+.blog-more-button {
+  margin-top: 22px;
 }
 
 .blog-detail {
@@ -3049,7 +3146,7 @@ html body .home-logo-circle img {
 html body .chat-input {
   grid-template-columns: 1fr 40px !important;
   gap: 8px !important;
-  padding: 6px 12px calc(76px + env(safe-area-inset-bottom)) !important;
+  padding: 8px 12px calc(10px + env(safe-area-inset-bottom)) !important;
 }
 
 html body .chat-input input {
@@ -3217,6 +3314,32 @@ html body .category-pill {
 
   html body .with-tabs {
     padding-bottom: 72px !important;
+  }
+
+  html body .chat-screen.with-tabs {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 350px !important;
+    width: auto !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr) auto !important;
+    padding-bottom: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html body .chat-screen .messages {
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+
+  html body .chat-screen .chat-input {
+    align-self: end !important;
   }
 
   html body .quick-grid {

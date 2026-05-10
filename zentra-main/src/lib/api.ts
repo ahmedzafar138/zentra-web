@@ -1,4 +1,4 @@
-const trimSlash = (value: string) => value.replace(/\/$/, "");
+﻿const trimSlash = (value: string) => value.replace(/\/$/, "");
 
 export const MEAL_API_BASE_URL = trimSlash(
   import.meta.env.VITE_MEAL_GENERATOR_API_BASE_URL ??
@@ -96,18 +96,28 @@ async function readJson<T>(response: Response): Promise<T> {
 }
 
 async function getJson<T>(baseUrl: string, path: string): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`);
-  return readJson<T>(response);
+  const url = `${baseUrl}${path}`;
+  try {
+    const response = await fetch(url);
+    return readJson<T>(response);
+  } catch (error) {
+    throw new Error(error instanceof Error ? `${error.message} (${url})` : `Unable to reach ${url}`);
+  }
 }
 
 async function postJson<T>(baseUrl: string, path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const url = `${baseUrl}${path}`;
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
 
-  return readJson<T>(response);
+    return readJson<T>(response);
+  } catch (error) {
+    throw new Error(error instanceof Error ? `${error.message} (${url})` : `Unable to reach ${url}`);
+  }
 }
 
 export async function checkService(
@@ -210,6 +220,41 @@ export function loadBicepCurlModel() {
   );
 }
 
+export function loadSquatModel() {
+  return postJson<Record<string, unknown>>(
+    MODEL_GATEWAY_API_BASE_URL,
+    "/api/v1/squats/load",
+  );
+}
+
+export function loadDeadliftModel() {
+  return postJson<Record<string, unknown>>(
+    MODEL_GATEWAY_API_BASE_URL,
+    "/api/v1/deadlifts/load",
+  );
+}
+
+export function loadPlankModel() {
+  return postJson<Record<string, unknown>>(
+    MODEL_GATEWAY_API_BASE_URL,
+    "/api/v1/planks/load",
+  );
+}
+
+export function loadPushupModel() {
+  return postJson<Record<string, unknown>>(
+    MODEL_GATEWAY_API_BASE_URL,
+    "/api/v1/pushups/load",
+  );
+}
+
+export function loadDumbbellFlyModel() {
+  return postJson<Record<string, unknown>>(
+    MODEL_GATEWAY_API_BASE_URL,
+    "/api/v1/dumbbell-fly/load",
+  );
+}
+
 
 export function startBicepCurlSession() {
   return postJson<BicepCurlSession>(
@@ -217,3 +262,4 @@ export function startBicepCurlSession() {
     "/api/v1/bicep-curl/session/start",
   );
 }
+

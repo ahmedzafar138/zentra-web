@@ -1,0 +1,6 @@
+# python 3.11 venv
+
+# pip install tensorflow==2.16.1 keras==3.13.2 mediapipe==0.10.9 protobuf==3.20.3 opencv-python==4.9.0.80 numpy==1.26.4 scikit-learn==1.4.2 tqdm==4.66.4
+
+# python --version
+# python -c "import tensorflow as tf, keras, mediapipe as mp, google.protobuf; print('TF:', tf.__version__); print('Keras:', keras.__version__); print('MediaPipe:', mp.__version__); print('Protobuf:', google.protobuf.__version__)"
