@@ -282,109 +282,123 @@ function LivePage() {
 
   return (
     <AppShell>
-      <div className="space-y-6 max-w-4xl">
+      <div className="space-y-3">
         <div className="flex items-center gap-3">
           <Link to="/form-correction/$group" params={{ group }}
-            className="h-10 w-10 grid place-items-center rounded-xl bg-surface border border-border hover:border-primary/40 transition">
+            className="h-10 w-10 grid place-items-center rounded-xl bg-surface border border-border hover:border-primary/40 transition shrink-0">
             <ChevronLeft className="h-4 w-4" />
           </Link>
-          <div>
-            <p className="text-sm text-muted-foreground">{group} form correction</p>
-            <h1 className="text-3xl font-bold">{exercise}</h1>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-muted-foreground">{group} form correction</p>
+            <h1 className="text-xl md:text-2xl font-bold truncate">{exercise}</h1>
           </div>
+          <span className={`hidden sm:inline-flex items-center gap-1.5 px-3 h-9 rounded-full text-xs font-semibold ${streaming ? "bg-destructive/20 text-destructive" : "bg-surface border border-border text-muted-foreground"}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${streaming ? "bg-destructive animate-pulse" : "bg-muted-foreground"}`} />
+            {streaming ? "REC" : "READY"}
+          </span>
         </div>
 
         {error && (
-          <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">{error}</div>
+          <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</div>
         )}
 
-        <div className="card-elevated p-5">
-          <div className="flex items-center justify-between text-xs uppercase tracking-wider text-muted-foreground mb-3">
-            <span className={`px-2.5 py-1 rounded-full font-semibold ${streaming ? "bg-destructive/20 text-destructive" : "bg-surface-elevated"}`}>
-              {streaming ? "REC" : "READY"}
-            </span>
-            <span>{formatDuration(elapsedSeconds)}</span>
-            <span className="font-semibold text-foreground">{isPlank ? plankFormTone : `REPS ${stats.correct + stats.incorrect}`}</span>
+        {/* Two-column on lg+: video left, stats + feedback + actions right.
+            Stacks vertically on mobile. */}
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
+          {/* Left: video card */}
+          <div className="card-elevated p-3">
+            <div className="flex items-center justify-between text-xs uppercase tracking-wider text-muted-foreground mb-2 px-1">
+              <span className={`sm:hidden px-2 py-0.5 rounded-full font-semibold text-[10px] ${streaming ? "bg-destructive/20 text-destructive" : "bg-surface-elevated"}`}>
+                {streaming ? "REC" : "READY"}
+              </span>
+              <span>{formatDuration(elapsedSeconds)}</span>
+              <span className="font-semibold text-foreground">{isPlank ? plankFormTone : `REPS ${stats.correct + stats.incorrect}`}</span>
+            </div>
+            <div className="relative aspect-video bg-black rounded-xl overflow-hidden">
+              <video ref={videoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover scale-x-[-1]" />
+              {hasSkeleton && (
+                <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
+                  {skeletonConnections.map(([fromName, toName]) => {
+                    const from = landmarkByName.get(fromName);
+                    const to = landmarkByName.get(toName);
+                    if (!from || !to) return null;
+                    return (
+                      <line key={`${fromName}-${toName}`} x1={1 - from.x} y1={from.y} x2={1 - to.x} y2={to.y}
+                        stroke="rgb(255 106 0)" strokeWidth="0.008" strokeLinecap="round" />
+                    );
+                  })}
+                  {visibleLandmarks.map((landmark) => (
+                    <circle key={landmark.name} cx={1 - landmark.x} cy={landmark.y} r="0.012"
+                      fill="rgb(255 106 0)" stroke="white" strokeWidth="0.004" />
+                  ))}
+                </svg>
+              )}
+              {streaming && (
+                <div className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs glass ${hasSkeleton ? "text-primary" : "text-muted-foreground"}`}>
+                  {hasSkeleton ? "Skeleton tracking" : "Searching for pose"}
+                </div>
+              )}
+              {!cameraActive && (
+                <div className="absolute inset-0 grid place-items-center text-muted-foreground">
+                  <div className="text-center">
+                    <Camera className="h-10 w-10 mx-auto" />
+                    <p className="mt-2 font-medium text-sm">Webcam preview</p>
+                    <p className="text-xs">{exercise} · Live correction</p>
+                  </div>
+                </div>
+              )}
+              <canvas ref={canvasRef} hidden />
+            </div>
           </div>
-          <div className="relative aspect-[3/4] sm:aspect-video bg-black rounded-2xl overflow-hidden">
-            <video ref={videoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover scale-x-[-1]" />
-            {hasSkeleton && (
-              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
-                {skeletonConnections.map(([fromName, toName]) => {
-                  const from = landmarkByName.get(fromName);
-                  const to = landmarkByName.get(toName);
-                  if (!from || !to) return null;
-                  return (
-                    <line key={`${fromName}-${toName}`} x1={1 - from.x} y1={from.y} x2={1 - to.x} y2={to.y}
-                      stroke="rgb(255 106 0)" strokeWidth="0.008" strokeLinecap="round" />
-                  );
-                })}
-                {visibleLandmarks.map((landmark) => (
-                  <circle key={landmark.name} cx={1 - landmark.x} cy={landmark.y} r="0.012"
-                    fill="rgb(255 106 0)" stroke="white" strokeWidth="0.004" />
+
+          {/* Right: stats + feedback + actions */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              {isPlank ? (
+                <>
+                  <Stat icon={CheckSquare} value={plankFormStatus} label="Form" />
+                  <Stat icon={Activity} value={stats.angle ? `${stats.angle}°` : "—"} label="Angle" />
+                </>
+              ) : (
+                <>
+                  <Stat icon={CheckSquare} value={stats.correct} label="Correct" />
+                  <Stat icon={Trash2} value={stats.incorrect} label="Incorrect" />
+                </>
+              )}
+              <Stat icon={Activity} value={streaming ? "Live" : "Idle"} label="Status" />
+            </div>
+
+            <div className="card-elevated p-4">
+              <strong className="block text-sm">Live feedback</strong>
+              <div className="mt-2 space-y-1.5 text-sm">
+                {feedbackItems.map((item, index) => (
+                  <p key={`${item}-${index}`} className={index === 0 ? "text-primary" : "text-muted-foreground text-xs"}>
+                    {index === 0 ? "✓" : "•"} {item}
+                  </p>
                 ))}
-              </svg>
-            )}
-            {streaming && (
-              <div className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs glass ${hasSkeleton ? "text-primary" : "text-muted-foreground"}`}>
-                {hasSkeleton ? "Skeleton tracking" : "Searching for pose"}
               </div>
-            )}
-            {!cameraActive && (
-              <div className="absolute inset-0 grid place-items-center text-muted-foreground">
-                <Camera className="h-12 w-12" />
-                <p className="mt-3 font-medium">Webcam preview</p>
-                <p className="text-xs">{exercise} · Live correction</p>
-              </div>
-            )}
-            <canvas ref={canvasRef} hidden />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          {isPlank ? (
-            <>
-              <Stat icon={CheckSquare} value={plankFormStatus} label="Form" />
-              <Stat icon={Activity} value={stats.angle ? `${stats.angle}°` : "—"} label="Body Angle" />
-            </>
-          ) : (
-            <>
-              <Stat icon={CheckSquare} value={stats.correct} label="Correct" />
-              <Stat icon={Trash2} value={stats.incorrect} label="Incorrect" />
-            </>
-          )}
-          <Stat icon={Activity} value={streaming ? "Live" : "Idle"} label="Status" />
-        </div>
-
-        <div className="card-elevated p-5">
-          <strong className="block text-sm">Live feedback</strong>
-          <div className="mt-3 space-y-2 text-sm">
-            {feedbackItems.map((item, index) => (
-              <p key={`${item}-${index}`} className={index === 0 ? "text-primary" : "text-muted-foreground"}>
-                {index === 0 ? "✓" : "•"} {item}
+              <p className="text-xs text-muted-foreground mt-2 inline-flex items-center gap-2">
+                {streaming && <Loader2 className="h-3 w-3 animate-spin" />} {status}
               </p>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground mt-3 inline-flex items-center gap-2">
-            {streaming && <Loader2 className="h-3 w-3 animate-spin" />} {status}
-          </p>
-        </div>
+            </div>
 
-        <div className="grid sm:grid-cols-3 gap-3">
-          <button onClick={cameraActive ? stopLive : startCamera}
-            className="h-12 rounded-xl bg-surface border border-border text-sm hover:border-primary/40 transition inline-flex items-center justify-center gap-2">
-            {cameraActive ? <Square className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
-            {cameraActive ? "Stop Webcam" : "Open Webcam"}
-          </button>
-          <button onClick={streaming ? stopLive : startInference}
-            className="h-12 rounded-xl bg-gradient-primary text-white text-sm font-semibold shadow-[0_10px_30px_-10px_var(--glow)] hover:brightness-110 transition inline-flex items-center justify-center gap-2">
-            {streaming ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            {streaming ? "Pause Recording" : "Start Recording"}
-          </button>
-          <Link to="/form-correction/$group" params={{ group }}
-            className="h-12 rounded-xl bg-surface border border-border text-sm hover:border-primary/40 transition inline-flex items-center justify-center gap-2">
-            Switch Exercise
-          </Link>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={cameraActive ? stopLive : startCamera}
+                className="h-11 rounded-xl bg-surface border border-border text-xs sm:text-sm hover:border-primary/40 transition inline-flex items-center justify-center gap-1.5">
+                {cameraActive ? <Square className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}
+                {cameraActive ? "Stop" : "Open Cam"}
+              </button>
+              <Link to="/form-correction/$group" params={{ group }}
+                className="h-11 rounded-xl bg-surface border border-border text-xs sm:text-sm hover:border-primary/40 transition inline-flex items-center justify-center gap-1.5">
+                Switch
+              </Link>
+              <button onClick={streaming ? stopLive : startInference}
+                className="col-span-2 h-12 rounded-xl bg-gradient-primary text-white text-sm font-semibold shadow-[0_10px_30px_-10px_var(--glow)] hover:brightness-110 transition inline-flex items-center justify-center gap-2">
+                {streaming ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                {streaming ? "Pause Recording" : "Start Recording"}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </AppShell>
@@ -393,10 +407,10 @@ function LivePage() {
 
 function Stat({ icon: Icon, value, label }: { icon: typeof Activity; value: React.ReactNode; label: string }) {
   return (
-    <div className="card-elevated p-4 text-center">
-      <Icon className="h-5 w-5 mx-auto text-primary" />
-      <p className="text-xl font-semibold mt-2">{value}</p>
-      <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+    <div className="card-elevated p-3 text-center">
+      <Icon className="h-4 w-4 mx-auto text-primary" />
+      <p className="text-lg font-semibold mt-1 leading-tight">{value}</p>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">{label}</p>
     </div>
   );
 }
