@@ -77,29 +77,64 @@ function mapPost(post: WpPost, category: string): BlogPost {
  * Sources tried in order; first one that responds with >0 posts wins.
  * girlsgonestrong is the primary because nerdfitness returns mostly
  * image-less newsletter posts. Both are WordPress with the standard /wp-json
- * REST API.
+ * REST API. The `page` query param is the standard WP pagination knob — we
+ * use it so the Refresh button can pull a different batch every click.
  */
-const sources: Array<{ url: (perPage: number) => string; category: string }> = [
-  { url: (n) => `https://www.girlsgonestrong.com/wp-json/wp/v2/posts?per_page=${n}&_embed=1`, category: "Strength" },
-  { url: (n) => `https://www.nerdfitness.com/wp-json/wp/v2/posts?per_page=${n}&_embed=1`, category: "Fitness" },
+const sources: Array<{ url: (perPage: number, page: number, cacheBust: number) => string; category: string }> = [
+  {
+    url: (n, p, t) => `https://www.girlsgonestrong.com/wp-json/wp/v2/posts?per_page=${n}&page=${p}&_embed=1&_=${t}`,
+    category: "Strength",
+  },
+  {
+    url: (n, p, t) => `https://www.nerdfitness.com/wp-json/wp/v2/posts?per_page=${n}&page=${p}&_embed=1&_=${t}`,
+    category: "Fitness",
+  },
 ];
 
-export async function fetchBlogs(perPage = 18): Promise<BlogPost[]> {
-  let lastError: unknown = null;
-  for (const source of sources) {
-    try {
-      const response = await fetch(source.url(perPage));
-      if (!response.ok) throw new Error(`Blog API failed with ${response.status}`);
-      const data = (await response.json()) as WpPost[];
-      if (Array.isArray(data) && data.length > 0) {
-        return data.map((post) => mapPost(post, source.category));
+export type FetchBlogsResult = { posts: BlogPost[]; page: number; exhausted: boolean };
+
+/**
+ * Fetch a page of fitness blog posts.
+ *
+ * WP returns HTTP 400 (`rest_post_invalid_page_number`) when `page` exceeds
+ * the total page count. We detect that, fall back to page 1, and tell the
+ * caller via `exhausted: true` so it can reset its page counter.
+ *
+ * Each request is cache-busted so the browser doesn't hand us the same body.
+ */
+export async function fetchBlogs(perPage = 18, page = 1): Promise<FetchBlogsResult> {
+  const cacheBust = Date.now();
+
+  const attempt = async (p: number): Promise<{ posts: BlogPost[] } | null> => {
+    let lastError: unknown = null;
+    for (const source of sources) {
+      try {
+        const response = await fetch(source.url(perPage, p, cacheBust));
+        if (response.status === 400) {
+          // page out of range — try next source first, then signal exhaustion
+          continue;
+        }
+        if (!response.ok) throw new Error(`Blog API failed with ${response.status}`);
+        const data = (await response.json()) as WpPost[];
+        if (Array.isArray(data) && data.length > 0) {
+          return { posts: data.map((post) => mapPost(post, source.category)) };
+        }
+      } catch (err) {
+        lastError = err;
       }
-    } catch (err) {
-      lastError = err;
     }
+    if (lastError && p === 1) throw lastError instanceof Error ? lastError : new Error("Blog API failed");
+    return null;
+  };
+
+  const primary = await attempt(page);
+  if (primary) return { posts: primary.posts, page, exhausted: false };
+  // We ran past the end — wrap to page 1.
+  if (page > 1) {
+    const wrapped = await attempt(1);
+    if (wrapped) return { posts: wrapped.posts, page: 1, exhausted: true };
   }
-  if (lastError) throw lastError instanceof Error ? lastError : new Error("Blog API failed");
-  return [];
+  return { posts: [], page: 1, exhausted: true };
 }
 
 export function formatBlogDate(value: string) {

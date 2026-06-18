@@ -50,10 +50,10 @@ function Dashboard() {
         });
     }
     if (cachedBlogs.length === 0) {
-      fetchBlogs(6).then((list) => {
+      fetchBlogs(6).then(({ posts }) => {
         if (!active) return;
-        setCachedBlogs(list);
-        setLatestBlogs(list.slice(0, 3));
+        setCachedBlogs(posts);
+        setLatestBlogs(posts.slice(0, 3));
       }).catch(() => undefined);
     } else {
       setLatestBlogs(cachedBlogs.slice(0, 3));

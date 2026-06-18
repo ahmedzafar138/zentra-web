@@ -9,14 +9,14 @@ import { useAuth } from "@/hooks/useAuth";
 
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/workouts", label: "Workout Logs", icon: Dumbbell },
-  { to: "/steps", label: "Step Counter", icon: Footprints },
-  { to: "/meals", label: "Meal Plans", icon: UtensilsCrossed },
-  { to: "/form-correction", label: "Form Correction", icon: Activity },
-  { to: "/zentra-ai", label: "Zentra AI", icon: Sparkles },
-  { to: "/blogs", label: "Blogs", icon: BookOpen },
-  { to: "/history", label: "History", icon: HistoryIcon },
   { to: "/profile", label: "Profile", icon: UserIcon },
+  { to: "/form-correction", label: "Form Correction", icon: Activity },
+  { to: "/workouts", label: "Workout Logs", icon: Dumbbell },
+  { to: "/zentra-ai", label: "Zentra AI", icon: Sparkles },
+  { to: "/meals", label: "Meal Plans", icon: UtensilsCrossed },
+  { to: "/history", label: "History", icon: HistoryIcon },
+  { to: "/blogs", label: "Blogs", icon: BookOpen },
+  { to: "/steps", label: "Step Counter", icon: Footprints },
 ] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {

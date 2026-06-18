@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, Newspaper, RefreshCw } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Protected } from "@/components/Protected";
@@ -21,13 +21,18 @@ function BlogsPage() {
   const [loading, setLoading] = useState(blogs.length === 0);
   const [error, setError] = useState("");
   const [visibleCount, setVisibleCount] = useState(6);
+  // Current WordPress page we're displaying. Refresh pulls the next page so
+  // every click actually changes which blogs you see. When we run out of
+  // pages the helper wraps to page 1 and tells us via `exhausted`.
+  const pageRef = useRef(1);
 
-  const load = async () => {
+  const load = async (page = 1) => {
     setLoading(true);
     setError("");
     try {
-      const next = await fetchBlogs(18);
-      setBlogs(next);
+      const { posts, page: actualPage } = await fetchBlogs(18, page);
+      setBlogs(posts);
+      pageRef.current = actualPage;
       setVisibleCount(6);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load blogs.");
@@ -36,8 +41,12 @@ function BlogsPage() {
     }
   };
 
+  const refresh = () => {
+    void load(pageRef.current + 1);
+  };
+
   useEffect(() => {
-    if (blogs.length === 0) void load();
+    if (blogs.length === 0) void load(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -51,7 +60,7 @@ function BlogsPage() {
             <h1 className="text-3xl md:text-4xl font-bold">Blogs</h1>
             <p className="text-sm text-muted-foreground mt-1.5">Fitness, nutrition, and recovery articles curated for you.</p>
           </div>
-          <button onClick={load} disabled={loading}
+          <button onClick={refresh} disabled={loading}
             className="inline-flex items-center gap-2 h-11 px-4 rounded-xl bg-surface border border-border text-sm hover:border-primary/40 transition disabled:opacity-60">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Refresh
           </button>

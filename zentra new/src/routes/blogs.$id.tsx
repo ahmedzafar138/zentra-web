@@ -31,10 +31,10 @@ function BlogDetailPage() {
     let active = true;
     (async () => {
       try {
-        const list = await fetchBlogs(18);
+        const { posts } = await fetchBlogs(18);
         if (!active) return;
-        setBlogs(list);
-        const match = list.find((b) => b.id === id) ?? null;
+        setBlogs(posts);
+        const match = posts.find((b) => b.id === id) ?? null;
         setPost(match);
         setSelectedBlog(match);
       } catch (err) {
