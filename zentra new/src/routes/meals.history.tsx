@@ -9,8 +9,13 @@ import { supabase, hasSupabaseConfig } from "@/integrations/supabase/client";
 import type { RecipeResponse, ShoppingList, WeeklyMealPlan } from "@/lib/api";
 import type { MealMeta } from "@/lib/types";
 
+type MealsHistorySearch = { from?: "meals" };
+
 export const Route = createFileRoute("/meals/history")({
   head: () => ({ meta: [{ title: "Meal History — Zentra" }] }),
+  validateSearch: (search: Record<string, unknown>): MealsHistorySearch => ({
+    from: search.from === "meals" ? "meals" : undefined,
+  }),
   component: () => (
     <Protected>
       <MealHistoryPage />
@@ -35,6 +40,8 @@ type SavedRow = {
 
 function MealHistoryPage() {
   const navigate = useNavigate();
+  const { from } = Route.useSearch();
+  const backTo = from === "meals" ? "/meals" : "/history";
   const { user } = useAuth();
   const { setGeneratedMealPlan, setGeneratedRecipes, setShoppingList, setMealMeta } = useMealPlan();
   const [rows, setRows] = useState<SavedRow[]>([]);
@@ -99,7 +106,7 @@ function MealHistoryPage() {
     <AppShell>
       <div className="space-y-6 max-w-4xl">
         <div className="flex items-center gap-3">
-          <Link to="/history"
+          <Link to={backTo}
             className="h-10 w-10 grid place-items-center rounded-xl bg-surface border border-border hover:border-primary/40 transition">
             <ChevronLeft className="h-4 w-4" />
           </Link>

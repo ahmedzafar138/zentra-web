@@ -96,7 +96,7 @@ function MealsPage() {
             <h1 className="text-3xl md:text-4xl font-bold">Meal Generator</h1>
             <p className="text-sm text-muted-foreground mt-1.5">Meal plan catered to your calorie intake.</p>
           </div>
-          <Link to="/meals/history"
+          <Link to="/meals/history" search={{ from: "meals" }}
             className="inline-flex items-center gap-2 h-11 px-4 rounded-xl bg-surface border border-border text-sm hover:border-primary/40 transition">
             History <ArrowRight className="h-4 w-4" />
           </Link>

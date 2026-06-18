@@ -153,7 +153,7 @@ function StepsPage() {
             <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString()}</p>
             <h1 className="text-3xl md:text-4xl font-bold mt-1">Step Counter</h1>
           </div>
-          <Link to="/steps/history"
+          <Link to="/steps/history" search={{ from: "steps" }}
             className="inline-flex items-center gap-2 h-11 px-4 rounded-xl bg-surface border border-border text-sm hover:border-primary/40 transition">
             History <ArrowRight className="h-4 w-4" />
           </Link>

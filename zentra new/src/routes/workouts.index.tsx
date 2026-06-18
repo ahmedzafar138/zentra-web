@@ -166,7 +166,7 @@ function WorkoutsPage() {
             <h1 className="text-3xl md:text-4xl font-bold">Workout Log</h1>
             <p className="text-sm text-muted-foreground mt-1.5">Log your weights to keep progressing!</p>
           </div>
-          <Link to="/workouts/history"
+          <Link to="/workouts/history" search={{ from: "workouts" }}
             className="inline-flex items-center gap-2 h-11 px-4 rounded-xl bg-surface border border-border text-sm hover:border-primary/40 transition">
             History <ArrowRight className="h-4 w-4" />
           </Link>

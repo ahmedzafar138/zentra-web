@@ -9,8 +9,13 @@ import { monthKey, todayKey } from "@/lib/format";
 import type { WorkoutSet } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+type WorkoutsHistorySearch = { from?: "workouts" };
+
 export const Route = createFileRoute("/workouts/history")({
   head: () => ({ meta: [{ title: "Logs History — Zentra" }] }),
+  validateSearch: (search: Record<string, unknown>): WorkoutsHistorySearch => ({
+    from: search.from === "workouts" ? "workouts" : undefined,
+  }),
   component: () => (
     <Protected>
       <LogsHistoryPage />
@@ -22,6 +27,8 @@ type Tab = "summary" | "byExercise" | "calendar";
 type LoggedSet = WorkoutSet & { exerciseName: string; muscleGroup: string; dateKey: string };
 
 function LogsHistoryPage() {
+  const { from } = Route.useSearch();
+  const backTo = from === "workouts" ? "/workouts" : "/history";
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("summary");
   const [selectedExercise, setSelectedExercise] = useState("");
@@ -94,7 +101,7 @@ function LogsHistoryPage() {
     <AppShell>
       <div className="space-y-6 max-w-4xl">
         <div className="flex items-center gap-3">
-          <Link to="/history"
+          <Link to={backTo}
             className="h-10 w-10 grid place-items-center rounded-xl bg-surface border border-border hover:border-primary/40 transition">
             <ChevronLeft className="h-4 w-4" />
           </Link>

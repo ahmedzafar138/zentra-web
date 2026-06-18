@@ -7,8 +7,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase, hasSupabaseConfig } from "@/integrations/supabase/client";
 import { monthKey } from "@/lib/format";
 
+type StepsHistorySearch = { from?: "steps" };
+
 export const Route = createFileRoute("/steps/history")({
   head: () => ({ meta: [{ title: "Steps History — Zentra" }] }),
+  validateSearch: (search: Record<string, unknown>): StepsHistorySearch => ({
+    from: search.from === "steps" ? "steps" : undefined,
+  }),
   component: () => (
     <Protected>
       <StepsHistoryPage />
@@ -26,6 +31,8 @@ type StepRow = {
 };
 
 function StepsHistoryPage() {
+  const { from } = Route.useSearch();
+  const backTo = from === "steps" ? "/steps" : "/history";
   const { user } = useAuth();
   const [rows, setRows] = useState<StepRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +74,7 @@ function StepsHistoryPage() {
     <AppShell>
       <div className="space-y-8 max-w-4xl">
         <div className="flex items-center gap-3">
-          <Link to="/steps"
+          <Link to={backTo}
             className="h-10 w-10 grid place-items-center rounded-xl bg-surface border border-border hover:border-primary/40 transition">
             <ChevronLeft className="h-4 w-4" />
           </Link>
