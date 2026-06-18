@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Send, Sparkles } from "lucide-react";
+import { ChevronLeft, Loader2, Send, Sparkles, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Protected } from "@/components/Protected";
 import { useAuth } from "@/hooks/useAuth";
@@ -53,6 +53,7 @@ function ZentraAIPage() {
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [error, setError] = useState("");
+  const [clearing, setClearing] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -151,6 +152,33 @@ function ZentraAIPage() {
     };
   }, [user?.id]);
 
+  const clearChat = async () => {
+    if (messages.length === 0 || clearing) return;
+    if (typeof window !== "undefined" && !window.confirm("Clear this entire conversation? This cannot be undone.")) return;
+    setClearing(true);
+    setError("");
+    try {
+      // Always wipe local cache + UI immediately so the user sees the effect.
+      writeLocalAiMessages(user?.id, []);
+      setMessages([]);
+      // If we have a remote conversation, delete it; the messages table is
+      // ON DELETE CASCADE so removing the conversation row clears messages.
+      if (conversationId && user && hasSupabaseConfig) {
+        const { error: deleteError } = await supabase
+          .from("ai_chat_conversations")
+          .delete()
+          .eq("id", conversationId)
+          .eq("user_id", user.id);
+        if (deleteError) throw deleteError;
+      }
+      setConversationId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not clear chat from server.");
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const send = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -202,13 +230,26 @@ function ZentraAIPage() {
     <AppShell>
       <div className="max-w-4xl mx-auto h-[calc(100vh-9rem)] flex flex-col">
         <div className="flex items-center gap-3 pb-4">
-          <div className="h-12 w-12 rounded-2xl bg-gradient-primary grid place-items-center shadow-[0_10px_30px_-10px_var(--glow)]">
+          <Link to="/dashboard" aria-label="Back to dashboard"
+            className="h-10 w-10 grid place-items-center rounded-xl bg-surface border border-border hover:border-primary/40 transition shrink-0">
+            <ChevronLeft className="h-4 w-4" />
+          </Link>
+          <div className="h-12 w-12 rounded-2xl bg-gradient-primary grid place-items-center shadow-[0_10px_30px_-10px_var(--glow)] shrink-0">
             <Sparkles className="h-5 w-5 text-white" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">Zentra AI</h1>
-            <p className="text-sm text-muted-foreground">Your personal fitness & nutrition coach</p>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl font-bold truncate">Zentra AI</h1>
+            <p className="text-sm text-muted-foreground truncate">Your personal fitness & nutrition coach</p>
           </div>
+          {messages.length > 0 && (
+            <button onClick={clearChat} disabled={clearing}
+              title="Clear conversation"
+              aria-label="Clear conversation"
+              className="inline-flex items-center gap-1.5 h-10 px-3 sm:px-4 rounded-xl bg-surface border border-border text-xs sm:text-sm hover:border-destructive/40 hover:text-destructive transition disabled:opacity-60">
+              {clearing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              <span className="hidden sm:inline">Clear chat</span>
+            </button>
+          )}
         </div>
 
         {error && (
