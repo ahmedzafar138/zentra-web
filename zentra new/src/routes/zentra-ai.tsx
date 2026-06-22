@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { Protected } from "@/components/Protected";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase, hasSupabaseConfig } from "@/integrations/supabase/client";
-import { askZentra } from "@/lib/api";
+import { askZentra, clearZentraMemory } from "@/lib/api";
 import type { Message } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +19,22 @@ export const Route = createFileRoute("/zentra-ai")({
 });
 
 const aiChatHistoryKey = (userId?: string | null) => `zentra:ai-chat-history:${userId ?? "guest"}`;
+const ragConvKey = (userId?: string | null) => `zentra:ai-rag-conv:${userId ?? "guest"}`;
+
+/**
+ * The RAG backend uses this id as the key into its in-process memory store.
+ * Persisting it per-user gives a coherent multi-turn experience across page
+ * reloads; rotating it on "Clear chat" resets the server's memory.
+ */
+function loadOrCreateRagConvId(userId?: string | null): string {
+  if (typeof window === "undefined") return crypto.randomUUID();
+  const key = ragConvKey(userId);
+  const existing = window.localStorage.getItem(key);
+  if (existing) return existing;
+  const fresh = crypto.randomUUID();
+  window.localStorage.setItem(key, fresh);
+  return fresh;
+}
 
 function readLocalAiMessages(userId?: string | null): Message[] {
   if (typeof window === "undefined") return [];
@@ -55,7 +71,13 @@ function ZentraAIPage() {
   const [error, setError] = useState("");
   const [clearing, setClearing] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [ragConvId, setRagConvId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Lazy-create the RAG conversation id once we know who the user is.
+  useEffect(() => {
+    setRagConvId(loadOrCreateRagConvId(user?.id));
+  }, [user?.id]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -161,6 +183,15 @@ function ZentraAIPage() {
       // Always wipe local cache + UI immediately so the user sees the effect.
       writeLocalAiMessages(user?.id, []);
       setMessages([]);
+      // Rotate the RAG conversation id so the backend treats the next message
+      // as a fresh conversation (its memory store is keyed on this id).
+      const previousRagId = ragConvId;
+      const freshRagId = crypto.randomUUID();
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(ragConvKey(user?.id), freshRagId);
+      }
+      setRagConvId(freshRagId);
+      if (previousRagId) void clearZentraMemory(previousRagId);
       // If we have a remote conversation, delete it; the messages table is
       // ON DELETE CASCADE so removing the conversation row clears messages.
       if (conversationId && user && hasSupabaseConfig) {
@@ -200,7 +231,7 @@ function ZentraAIPage() {
       } catch (historyError) {
         setError(historyError instanceof Error ? historyError.message : "Could not save chat history.");
       }
-      const answer = await askZentra(trimmed);
+      const answer = await askZentra(trimmed, ragConvId);
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         role: "assistant",

@@ -51,7 +51,7 @@ function BlogDetailPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6 max-w-3xl">
+      <div className="space-y-6 max-w-3xl mx-auto">
         <div className="flex items-center gap-3">
           <Link to="/blogs"
             className="h-10 w-10 grid place-items-center rounded-xl bg-surface border border-border hover:border-primary/40 transition">

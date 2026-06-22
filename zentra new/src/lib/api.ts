@@ -63,7 +63,7 @@ export type RecipeResponse = {
 
 export type ShoppingList = Record<string, string[]>;
 
-export type RagResponse = { answer: string };
+export type RagResponse = { answer: string; conversation_id?: string };
 
 export type BicepCurlSession = { session_id: string; message: string };
 
@@ -194,8 +194,23 @@ export function parseMealPlan(value: unknown): WeeklyMealPlan {
   return firstDay as WeeklyMealPlan;
 }
 
-export function askZentra(question: string) {
-  return postJson<RagResponse>(RAG_API_BASE_URL, "/ask", { question });
+export function askZentra(question: string, conversationId?: string | null) {
+  return postJson<RagResponse>(RAG_API_BASE_URL, "/ask", {
+    question,
+    conversation_id: conversationId ?? undefined,
+  });
+}
+
+export async function clearZentraMemory(conversationId: string): Promise<void> {
+  // Best-effort: server keeps memory in-process and will TTL it out anyway,
+  // so we don't surface failures to the user.
+  try {
+    await postJson<{ cleared: boolean }>(RAG_API_BASE_URL, "/clear", {
+      conversation_id: conversationId,
+    });
+  } catch {
+    // ignore — local UI clear is still authoritative
+  }
 }
 
 export function loadBicepCurlModel() {
