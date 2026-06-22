@@ -44,5 +44,5 @@ Start-DevService `
 # Zentra Web App
 Start-DevService `
     -Title "Zentra Web 5173" `
-    -Path "$Root\zentra new" `
+    -Path "$Root\zentra main" `
     -Command "npm run dev"
